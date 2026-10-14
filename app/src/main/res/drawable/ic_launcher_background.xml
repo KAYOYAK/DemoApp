@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The adaptive icon's backdrop.
+
+  One flat colour, sampled from the artwork's own background, so the icon reads
+  as one image rather than a picture on a tile. The launcher crops the outer 25%
+  of an adaptive icon to whatever shape the device uses, which is why the
+  foreground is inset and this is only ever seen around the edges.
+
+  The template's green vector is replaced rather than kept: a background that
+  does not match the foreground is visible on every device that uses a round or
+  squircle mask.
+-->
+<color xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#20201E" />

@@ -1,0 +1,46 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# ---- signing keys and credentials: must never be committed ----
+*.jks
+*.keystore
+*.p12
+*.pfx
+keystore.properties
+signing.properties
+secrets.properties
+.env
+.env.*
+*.apk
+*.aab
+id_rsa
+id_ed25519
+
+# local machine configuration
+local.properties
+.idea/workspace.xml
+.idea/usage.statistics.xml
+.idea/shelf/
+.gradle/
+captures/
+.DS_Store
+Thumbs.db
+
+# local POM cache used by scripts/check-licenses.ps1 (regenerable, never commit)
+compliance/.pomcache/
+
+# Kotlin compiler session files, written next to the build rather than inside it
+.kotlin/

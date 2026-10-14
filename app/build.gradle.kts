@@ -1,0 +1,176 @@
+plugins {
+  alias(libs.plugins.android.application)
+  alias(libs.plugins.compose.compiler)
+  alias(libs.plugins.kotlin.serialization)
+}
+
+android {
+    namespace = "com.example.demoapp"
+
+    // compileSdk only decides which APIs are visible while compiling; it does
+    // not change runtime behaviour. targetSdk below stays at 36 and is what
+    // actually opts the app into platform behaviour changes.
+    //
+    // 37 is required by okhttp-android 5.5.0, which declares a minimum compile
+    // SDK of 37 in its AAR metadata. Raising it here rather than pinning an
+    // outdated HTTP client is the intended use of the split.
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 2
+        }
+    }
+
+    defaultConfig {
+        applicationId = "com.example.demoapp"
+        // 26 rather than 24 for java.nio.file, which ChatStore uses to replace a
+// conversation file atomically; File.renameTo cannot do that consistently across
+// platforms. Android 8.0 is a reasonable floor for an app whose smallest model
+// is 356 MB and which needs gigabytes of free RAM to run one.
+        minSdk = 26
+        // Kept equal to compileSdk. `lint` reports a lower target as "not targeting
+        // the latest versions; compatibility modes apply", and there is nothing here
+        // that wants a compatibility mode: the app declares one permission, serves no
+        // ads, has no background service and no content provider. Raising it is the
+        // cheap direction -- a target below the compile level is the one that gets
+        // behaviour the code was not written against.
+        targetSdk = 37
+        versionCode = 1
+        versionName = "1.0"
+
+        // The inference runtime is the constraint, not a preference.
+        //
+        // litertlm-android ships its native library for these two ABIs only. Without
+        // this filter the app also packages androidx.graphics.path for armeabi-v7a
+        // and x86, and the ABI split then looks like a 32-bit build to a 32-bit
+        // device: the package is offered by the store and accepted by the installer,
+        // and every launch fails on UnsatisfiedLinkError the moment the engine loads.
+        // Refusing the install is the failure a user can act on -- a 32-bit phone
+        // cannot run this app, and it can neither fit nor run a model from the
+        // catalogue at all.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    buildFeatures {
+      compose = true
+      aidl = false
+      buildConfig = false
+      shaders = false
+    }
+
+    packaging {
+      resources {
+        excludes += "/META-INF/{AL2.0,LGPL2.1}"
+      }
+    }
+}
+
+kotlin {
+    jvmToolchain(17)
+}
+
+dependencies {
+  val composeBom = platform(libs.androidx.compose.bom)
+  implementation(composeBom)
+  androidTestImplementation(composeBom)
+
+  // On-device LLM runtime. Apache-2.0; see docs/PRINCIPLES.md and
+  // compliance/allowed-licenses.json.
+  //
+  // This is deliberately the ONLY inference dependency: adding a second runtime
+  // would double the native payload in the APK and multiply the licence surface.
+  implementation(libs.litertlm.android)
+
+  // HTTP client, used by the model downloader and nothing else. That class is
+  // the only place in the application that touches the network -- see
+  // docs/PRINCIPLES.md. Apache-2.0.
+  implementation(libs.okhttp)
+
+  // Chat history persistence. See gradle/libs.versions.toml for why this is
+  // JSON files rather than Room: the serialization compiler plugin is already
+  // applied, so this costs one runtime dependency and no annotation processor.
+  implementation(libs.kotlinx.serialization.json)
+
+  // Core Android dependencies
+  implementation(libs.androidx.core.ktx)
+  implementation(libs.androidx.lifecycle.runtime.ktx)
+  implementation(libs.androidx.activity.compose)
+    // For the app lock. The platform has BiometricPrompt from API 28; this covers
+    // 26 and 27, which the app supports.
+    implementation(libs.androidx.biometric)
+    // BiometricPrompt is hosted by a FragmentActivity.
+    implementation(libs.androidx.fragment.ktx)
+
+  // Arch Components
+  implementation(libs.androidx.lifecycle.runtime.compose)
+  implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+  // Compose
+  implementation(libs.androidx.compose.ui)
+  implementation(libs.androidx.compose.ui.tooling.preview)
+  implementation(libs.androidx.compose.material3)
+  // Tooling
+  debugImplementation(libs.androidx.compose.ui.tooling)
+  // Instrumented tests
+  androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+  debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+  // Core icon set only -- about thirty icons.
+  //
+  // material-icons-extended is deliberately not used: it carries thousands of
+  // vector assets to supply one or two, and the whole of it lands in every debug
+  // build. Where a core icon is not a close enough match the UI uses a close
+  // one, which is why stopping a reply uses a close mark rather than a stop
+  // square.
+  implementation(libs.androidx.compose.material.icons.core)
+
+  // Local tests: jUnit, coroutines, Android runner
+  testImplementation(libs.junit)
+  testImplementation(libs.kotlinx.coroutines.test)
+  // Test-only: lets the downloader's awkward cases (Range ignored, 416,
+  // checksum mismatch) be provoked deterministically. Not on the release
+  // classpath and therefore not part of what ships.
+  testImplementation(libs.mockwebserver)
+
+  // Instrumented tests.
+  //
+  // Two groups, and the difference between them is the point.
+  //
+  // **Kept** (above, with the Compose block): `compose-ui-test-junit4` and
+  // `ui-test-manifest`. Nothing imports them today. They cost nothing that ships --
+  // one is `androidTest` only, the other `debug` only -- and they are the entire
+  // facility for a Compose UI test. Removing them would have made the next person
+  // re-add a dependency to write one test.
+  //
+  // **Removed** here: espresso, test-core, and test-runner. Nothing imported those
+  // either, and unlike the Compose pair they are not what a UI test needs.
+  //
+  // What made this worth looking at: "there is no Compose UI test setup" was used
+  // once as the reason not to add regression tests for the font-scale sample and the
+  // erase progress. That reason was wrong -- the setup was already declared, and what
+  // was missing was a test, not a facility. Whether those two get written now depends
+  // on having a device to run them, which is a different question from what the build
+  // declares.
+  //
+  // One dependency is genuinely needed by the one instrumented test that exists:
+  // `LiteRtLlmEngineTest` runs on a device to prove the native library loads and the
+  // runtime reports what this project thinks it does, and it needs a runner
+  // annotation.
+  androidTestImplementation(libs.androidx.test.ext.junit)
+
+  // Navigation
+  implementation(libs.androidx.navigation3.ui)
+  implementation(libs.androidx.navigation3.runtime)
+  implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+}

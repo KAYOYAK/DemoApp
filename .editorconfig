@@ -1,0 +1,36 @@
+# Keeps editors that respect EditorConfig aligned on the basics, so a
+# contribution does not arrive reformatted.
+# https://editorconfig.org
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{kt,kts}]
+indent_size = 4
+
+[*.{xml,json,yml,yaml,toml}]
+indent_size = 2
+
+[*.md]
+# Trailing spaces in Markdown are a hard line break; stripping them changes
+# the rendered output.
+trim_trailing_whitespace = false
+
+[*.{bat,cmd}]
+end_of_line = crlf
+
+[*.{ps1,psm1}]
+end_of_line = crlf
+
+[*.{sh,bash}]
+indent_size = 2
+
+[Makefile]
+indent_style = tab

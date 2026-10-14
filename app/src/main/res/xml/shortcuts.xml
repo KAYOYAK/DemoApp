@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Long-press shortcuts.
+
+    One, and it is the one this app is for. A shortcut that opened the chat the
+    launcher already opens would be a second way to do the same thing, which is
+    worse than not having it: it teaches the user that the shortcut does nothing.
+
+    "New chat" is the act that has no other gesture. Opening the app continues
+    whatever was last said, so starting fresh costs a tap through the overflow
+    every time, and that is the moment someone decides they will just keep typing
+    in the old conversation instead.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="new_chat"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_new_chat_short"
+        android:shortcutLongLabel="@string/shortcut_new_chat_long">
+        <intent
+            android:action="com.example.demoapp.NEW_CHAT"
+            android:targetPackage="com.example.demoapp"
+            android:targetClass="com.example.demoapp.MainActivity" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+</shortcuts>

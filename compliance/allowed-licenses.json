@@ -1,0 +1,79 @@
+{
+  "_comment": [
+    "License allow-list for this project.",
+    "",
+    "check-licenses.ps1 fails the build when a resolved dependency carries a",
+    "license that is not listed here. The list is deliberately narrow: every",
+    "entry has been considered for what it obliges this project to do.",
+    "",
+    "Adding an entry is a deliberate act. If a new dependency needs one, that",
+    "is the moment to stop and read its licence."
+  ],
+
+  "allowed": {
+    "Apache-2.0": {
+      "verdict": "permissive",
+      "obligation": "Preserve copyright, patent, trademark and attribution notices; state modifications. Patent grant included.",
+      "action": "Listed in NOTICE and THIRD_PARTY_LICENSES.md."
+    },
+    "MIT": {
+      "verdict": "permissive",
+      "obligation": "Preserve the copyright notice and permission notice.",
+      "action": "Listed in THIRD_PARTY_LICENSES.md."
+    },
+    "BSD-2-Clause": {
+      "verdict": "permissive",
+      "obligation": "Preserve the copyright notice and the two conditions.",
+      "action": "Listed in THIRD_PARTY_LICENSES.md."
+    },
+    "BSD-3-Clause": {
+      "verdict": "permissive",
+      "obligation": "Preserve the copyright notice, the three conditions, and do not use contributor names to endorse the product.",
+      "action": "Listed in THIRD_PARTY_LICENSES.md."
+    },
+    "CC0-1.0": {
+      "verdict": "public-domain",
+      "obligation": "None. Dedicated to the public domain.",
+      "action": "No action required; recorded for completeness."
+    },
+    "Unicode-3.0": {
+      "verdict": "permissive",
+      "obligation": "Preserve the copyright and permission notice; do not use Unicode names to endorse derived products.",
+      "action": "Listed in THIRD_PARTY_LICENSES.md."
+    },
+    "Public Domain": {
+      "verdict": "public-domain",
+      "obligation": "None.",
+      "action": "No action required."
+    }
+  },
+
+  "denied": {
+    "GPL-2.0": "Copyleft: would force this application to be distributed under GPL-2.0.",
+    "GPL-3.0": "Copyleft: would force this application to be distributed under GPL-3.0.",
+    "LGPL-2.1": "Weak copyleft: requires relinking ability and notice; avoid in an application.",
+    "LGPL-3.0": "Weak copyleft: requires relinking ability and notice; avoid in an application.",
+    "AGPL-3.0": "Network copyleft: would impose source disclosure on server interaction.",
+    "SSPL-1.0": "Not an OSI-approved licence; restricts service provision.",
+    "BUSL-1.1": "Time-limited proprietary licence; not open source during its term.",
+    "LicenseRef-Gemma": "Custom licence: Google may change terms unilaterally and restrict use remotely. See docs/legal/MODEL_LICENSES.md.",
+    "Gemma Terms of Use": "Custom licence: see docs/legal/MODEL_LICENSES.md.",
+    "UNKNOWN": "No licence declared. Treat as all rights reserved until proven otherwise."
+  },
+
+  "manualOverrides": {
+    "_comment": [
+      "Artifacts whose published metadata does not declare a licence, but whose",
+      "licence has been established from another authoritative source.",
+      "Each entry needs a source URL and a date; unverified entries are rejected.",
+      "",
+      "Do not add an entry here to silence a failure you have not resolved."
+    ],
+    "com.google.guava:listenablefuture": {
+      "licence": "CC0-1.0",
+      "source": "https://github.com/google/guava/blob/master/android/guava/src/com/google/common/util/concurrent/listenablefuture/ListenableFuture.java",
+      "reason": "Published as an interface-only placeholder; no POM licence block. Upstream guava is Apache-2.0.",
+      "verifiedOn": "2026-10-12"
+    }
+  }
+}

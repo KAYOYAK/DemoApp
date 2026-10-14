@@ -1,0 +1,465 @@
+<resources>
+    <!--
+      Every word this app shows a person.
+
+      One file, in Chinese, because this app has one audience and no plans for a
+      second. The text is here rather than in the screens for the usual reason —
+      one place to read, one place to change —and because a sentence split
+      across Kotlin string concatenation cannot be proof-read or searched for.
+
+      Placeholders are positional (%1$s, %2$d) rather than sequential, because a
+      sentence reworded later may reorder them.
+    -->
+
+    <string name="app_name" translatable="false">NULL</string>
+
+    <!-- ============================================================ 对话页 === -->
+
+    <string name="chat_new">新对话</string>
+    <string name="chat_history">聊天记录</string>
+    <string name="chat_more">更多</string>
+    <string name="chat_models">模型</string>
+    <string name="chat_settings">设置</string>
+    <string name="chat_message_hint">输入消息…</string>
+    <string name="chat_send">发送</string>
+    <string name="chat_stop">停止</string>
+    <string name="chat_message_actions">消息操作</string>
+    <string name="chat_ask_again">重新回答</string>
+    <string name="chat_keep">收藏这条</string>
+    <string name="chat_unkeep">取消收藏</string>
+    <string name="chat_kept_marker">已收藏</string>
+    <string name="chat_share_message">分享这条</string>
+    <string name="chat_share_subject">一条回复</string>
+<string name="load_fail_missing">「%1$s」的模型文件不在了。为什么：应用目录里的这个文件被删过或被改坏。怎么办：到模型页重新下载一次。</string>
+<string name="load_fail_memory">「%1$s」要的内存超过这台设备给模型的上限。为什么：模型运行时需要的空间比这台设备愿意给的更多。怎么办：关掉一些后台应用再试，或者换一个小一号的模型。</string>
+<string name="load_fail_unsupported">这台设备跑不了「%1$s」。为什么：它的格式或算子要求超出了当前运行时装得下的范围。怎么办：换一个模型；如果列表里的都能装，这多半是导入的文件有问题。</string>
+<string name="load_fail_engine">「%1$s」在启动运行时的时候失败了。为什么：模型文件通过了检查，但运行时在启动过程中报了错。怎么办：先重试一次；一直失败就把下面的详情连着诊断信息一起发出去。</string>
+<string name="load_fail_unknown">没能加载「%1$s」。为什么：运行时给的原因不在已知的那几类里。怎么办：重试一次；还不行就把下面的详情发出去。</string>
+<string name="load_fail_runtime_busy">还没能切换到「%1$s」。为什么：正在跑的那个模型还没停下来，运行时不放手。怎么办：等它停完再试一次；现在这个模型仍然可以用。</string>
+    <string name="date_today">今天</string>
+    <string name="date_yesterday">昨天</string>
+    <string name="date_last_seven">过去 7 天</string>
+    <string name="date_last_thirty">过去 30 天</string>
+    <string name="date_earlier">更早</string>
+    <string name="history_export_markdown">导出为 Markdown</string>
+    <string name="history_export_markdown_subject">对话导出</string>
+    <string name="chat_speak">朗读</string>
+    <string name="chat_speak_stop">停止朗读</string>
+    <string name="chat_speak_unavailable">这台设备没装中文语音，读不了。</string>
+    <string name="chat_context_trimmed">最早的 %1$d 条已经不在这轮上下文里了——模型看不到它们了。开一段新对话能把它清空。</string>
+    <string name="chat_copied_paragraph">这一段已复制。</string>
+    <string name="chat_copy">复制全文</string>
+    <string name="chat_edit_resend">修改后重发</string>
+    <string name="chat_edit_title">修改这条提问</string>
+    <string name="chat_edit_hint">问题</string>
+    <string name="chat_edit_send">重发</string>
+    <string name="chat_edit_cancel">取消</string>
+    <string name="chat_copied">已复制</string>
+    <string name="chat_reasoned">已思考</string>
+    <string name="chat_version">%1$d / %2$d</string>
+    <string name="chat_reasoned_hide">收起</string>
+    <string name="chat_reasoned_only">它想完了，但没给出答案。再问一次，或者换个问法。</string>
+    <string name="markdown_copy_code">复制代码</string>
+    <string name="shortcut_new_chat_short">新对话</string>
+    <string name="shortcut_new_chat_long">从空的开始</string>
+    <string name="chat_search_hint">在这段对话里找</string>
+    <string name="chat_search_close">退出搜索</string>
+    <string name="chat_search_count">%1$d / %2$d 条消息</string>
+    <string name="chat_search_none">没有匹配的消息。</string>
+
+    <!-- ==================================================== 给用户看的错误和状态 === -->
+    <!--
+        这些以前是散在代码里的英文字符串。现在都在这里，而且类型上就走不出去
+        （见 UiMessage.kt）。占位符一律用位置参数，避免翻译时顺序错位。
+    -->
+
+    <!-- 模型加载 -->
+    <string name="err_no_gpu_fell_back">这台设备用不了图形处理器，改用处理器也没成功。换个体积小一点的模型可能可以。</string>
+    <string name="err_no_npu">这台设备上没有这个模型能用的 NPU。NPU 需要专门为那颗芯片编译的模型。</string>
+    <string name="err_model_load_failed">模型加载失败。</string>
+
+    <!-- 生成 -->
+    <string name="err_generation_failed">生成失败。</string>
+
+    <!-- 下载 -->
+    <string name="err_download_no_space">空间不够。这个模型需要 %1$s，这台设备上只剩 %2$s。</string>
+    <string name="err_download_checksum">文件校验不通过，已经删掉了。通常是下载过程中出了问题，重新下一次。</string>
+    <string name="err_download_incomplete">下载没有完成。再试一次会从断的地方继续。</string>
+    <string name="err_download_failed">下载失败。</string>
+
+    <!-- 对话与存储 -->
+    <string name="err_conversation_open">这段对话打不开。</string>
+    <string name="err_conversation_save">这段对话没能保存。</string>
+    <string name="err_new_chat">没法开始新对话。</string>
+    <string name="err_model_mismatch">模型可能和屏幕上显示的不一致。</string>
+    <string name="err_settings_save">这项设置没能保存。</string>
+    <string name="err_history_delete">没能删除「%1$s」。</string>
+    <string name="err_history_open">这段对话读不出来。</string>
+    <string name="err_history_rename">没能改名。</string>
+    <string name="err_history_pin">没能改置顶。</string>
+    <string name="err_erase_failed">没能完全清空。</string>
+
+    <!-- 导入流程 -->
+    <string name="err_import_need_licence">请选择这个模型用的许可证。这个应用只收许可证允许的模型。</string>
+    <string name="err_import_need_source">请说明你在哪里核对的许可证。这条记录是让别人也能核对它的依据。</string>
+    <string name="err_import_no_file_access">这个版本读不了你设备上的文件。</string>
+    <string name="err_import_failed">没能添加这个文件。</string>
+    <string name="err_delete_still_present">%1$s 还在这台设备上。先关掉对话再试。</string>
+    <string name="import_added">%1$s 已经加进来了。</string>
+    <!-- 发布方 -->
+    <string name="publisher_qwen">阿里通义千问</string>
+    <string name="publisher_minicpm">面壁智能</string>
+    <string name="publisher_deepseek">深度求索</string>
+    <string name="publisher_imported">你自己导入的</string>
+    <string name="erase_done">这台设备上的数据已经全部删除。</string>
+
+    <!-- 存储与时间 -->
+    <string name="time_less_than_a_minute">不到一分钟</string>
+    <string name="time_about_minutes">约 %1$d 分钟</string>
+    <string name="time_about_hours">约 %1$d 小时</string>
+    <string name="time_about_hours_minutes">约 %1$d 小时 %2$d 分钟</string>
+    <string name="export_footer">在这台设备上生成，没有发送到任何地方。</string>
+    <string name="export_you">你</string>
+    <string name="export_model">模型</string>
+    <string name="export_model_note">模型：</string>
+    <string name="export_tokens_note">词元：</string>
+    <string name="export_rate">%1$s 词元/秒</string>
+    <string name="export_stopped">[在这里被停掉了]</string>
+    <string name="export_exported_at">导出时间 %1$s</string>
+    <string name="imported_model_description">你自己添加的模型文件。不属于这个应用自带的列表。</string>
+
+    <!-- ==================================================== 模型目录的描述 === -->
+    <string name="model_qwen3_0_6b_int4">目录里最小的模型，329 MB。4 位量化，低端机和存储紧张时选它。</string>
+    <string name="model_qwen3_0_6b">完整的 0.6B，比量化版回答更稳。大多数手机都能跑。</string>
+    <string name="model_minicpm5_1b">面壁智能的小模型，756 MB。中文理解和写作在这个体积里表现突出。</string>
+    <string name="model_qwen35_0_8b">通义最新的小尺寸版本，920 MB。中文对话比 0.6B 明显自然。</string>
+    <string name="model_minicpm5_2b_int4">1.4 GB。参数翻倍但用 4 位量化压住了体积，中端机推荐。</string>
+    <string name="model_deepseek_r1_qwen_1_5b">1.7 GB。会先推理再回答，适合数学和逻辑，回答也长一些。</string>
+    <string name="model_qwen3_1_7b">1.9 GB。目录里中文最稳的一档，需要 6 GB 以上可用内存。</string>
+
+    <!-- 开发者可见：ModelCatalogue.validate() 的问题列表不会渲染到界面上，只是抛出的异常信息，保留英文便于排查。 -->
+    <string name="chat_delete_exchange">删除这组问答</string>
+    <string name="chat_delete_message">删除</string>
+    <string name="chat_stopped">已停止</string>
+    <string name="chat_seconds">%1$s 秒</string>
+    <string name="chat_rate">%1$s tok/s</string>
+    <string name="chat_first_token">首字 %1$s 秒</string>
+    <string name="chat_context">上下文 %1$d / %2$d</string>
+    <string name="chat_context_full">上下文快满了。新开一段对话，模型才读得到前面说的。</string>
+
+    <string name="chat_needs_model_title">还没有可用的模型</string>
+
+    <string name="chat_no_model_title">还没有模型</string>
+    <string name="chat_no_model_body">这个应用把模型跑在手机上，所以它自己不带模型——你要先下载一个。模型只下一次，之后完全离线，不会再联网。</string>
+    <string name="chat_no_model_action">去选一个模型</string>
+    <string name="chat_no_model_hint">列表里每个模型都写了运行需要多少内存。挑这台设备跑得动的那个。</string>
+    <string name="chat_empty_title">开始新的对话</string>
+    <string name="chat_empty_body">消息只留在这台手机上，不会发送到任何地方。</string>
+
+    <string name="chat_thinking">%1$s 正在思考…</string>
+    <string name="chat_loading_model">正在加载模型…</string>
+    <string name="chat_loading_model_named">正在加载「%1$s」…</string>
+    <string name="chat_loading_model_hint">模型文件有好几 GB，读进内存要几秒。这不是卡住了。</string>
+
+    <!-- ============================================================ 模型页 === -->
+
+    <string name="models_title">模型</string>
+    <string name="models_download">下载</string>
+    <string name="models_cancel">取消</string>
+    <string name="models_delete">删除</string>
+    <string name="models_verifying">正在校验</string>
+    <string name="models_retry">重试</string>
+    <string name="models_storage">已占用 %1$s　可用 %2$s</string>
+    <string name="models_checking">正在读取这台设备上的模型…</string>
+    <string name="models_subtitle">%1$s · %2$s B 参数 · %3$s</string>
+    <string name="models_memory">运行约需 %1$s 内存</string>
+    <string name="models_memory_too_big">这台设备跑不动：需要 %1$s，上限 %2$s。换小一号的模型。</string>
+    <string name="models_benchmark">跑分</string>
+    <string name="models_benchmarking">正在跑…</string>
+    <string name="models_benchmark_prompt">用一句话说明什么是光合作用。</string>
+    <string name="benchmark_model">%1$s</string>
+    <string name="benchmark_first_token">首字延迟：%1$s 秒</string>
+    <string name="benchmark_decode">解码：%1$s tok/s</string>
+    <string name="benchmark_prefill">预填充：%1$s tok/s</string>
+    <string name="benchmark_load">加载耗时：%1$s 秒</string>
+    <string name="benchmark_same_prompt">所有模型跑的是同一句话，所以数字之间可以比。</string>
+    <string name="models_benchmark_hint">换模型时想知道哪个快，跑一次就有数字了——不用凭感觉。</string>
+    <string name="models_verify">校验</string>
+    <string name="models_verify_intact">「%1$s」和发布时一致。</string>
+    <string name="models_verify_damaged">「%1$s」和发布时不一样了。重新下载一次。</string>
+    <string name="models_verify_missing">「%1$s」不在了。</string>
+    <string name="models_verify_failed">没能读完「%1$s」。</string>
+    <string name="models_verify_dismiss">知道了</string>
+    <string name="models_ram_title">内存可能不够</string>
+    <string name="models_ram_body">这个模型运行约需 %1$s，而这台设备给模型的上限是 %2$s。继续的话可能会被系统杀掉，也可能没事——取决于现在还有多少应用在跑。</string>
+    <string name="models_ram_proceed">仍然继续</string>
+    <string name="models_ram_cancel">换一个</string>
+    <string name="models_licence">许可证：%1$s</string>
+    <string name="models_left">剩余 %1$s</string>
+    <string name="models_of">/ %1$s</string>
+    <string name="models_installed">已安装</string>
+    <string name="models_cancelled">停在 %1$s。继续下载通常能接上，但服务器拒绝的话会重新开始。</string>
+    <string name="models_resume">继续</string>
+
+    <string name="models_delete_title">删除「%1$s」？</string>
+    <string name="models_delete_body_in_progress">这会删掉已经下载的 %1$s 并停止下载。重新获取意味着从头再来，用移动数据可能要花钱。</string>
+    <string name="models_delete_body">会释放 %1$s。需要时可以重新下载。</string>
+    <string name="models_delete_confirm">删除</string>
+    <string name="models_delete_cancel">取消</string>
+
+    <!-- 导入本地模型 -->
+    <string name="import_add">添加本地模型文件</string>
+    <string name="import_add_explainer">用于你已经有的 .litertlm 文件。要等你说明它的许可证之后才会复制进来——这个应用只收录许可证允许的模型。</string>
+    <string name="import_form_title">添加这个模型</string>
+    <string name="import_form_name">名称</string>
+    <string name="import_form_licence">选择许可证</string>
+    <string name="import_form_licence_button">许可证</string>
+    <string name="import_form_licence_hint">这里只列出允许再分发的许可证。其他许可证的模型这个应用不能收录。</string>
+    <string name="import_form_source">许可证的出处在哪</string>
+    <string name="import_form_source_hint">https://…</string>
+    <string name="import_form_source_explainer">说明该许可证的那个页面链接。有了它，别人才能够核对同一件事。</string>
+    <string name="import_form_confirm">添加</string>
+    <string name="import_form_cancel">取消</string>
+    <string name="import_copying">正在复制…</string>
+    <string name="import_verifying">正在校验…</string>
+    <string name="import_progress">%1$s / %2$s</string>
+    <string name="import_stop">停止</string>
+    <string name="import_done_title">已添加</string>
+    <string name="import_failed_title">没能添加</string>
+    <string name="import_ok">好</string>
+
+    <string name="import_name_taken">「%1$s」已经是「%2$s」的文件了。请改名，或先移除那个模型。</string>
+
+    <string name="models_about">关于</string>
+
+    <!-- ========================================================== 记录页 === -->
+
+    <string name="history_title">聊天记录</string>
+    <string name="history_subtitle">这台设备上有 %1$d 段对话</string>
+    <string name="history_open">打开</string>
+    <string name="history_share">分享</string>
+    <string name="history_rename">重命名</string>
+    <string name="history_pin">置顶</string>
+    <string name="history_unpin">取消置顶</string>
+    <string name="history_pinned_marker">已置顶</string>
+    <string name="history_archive">归档</string>
+    <string name="history_unarchive">取消归档</string>
+    <string name="history_archived_marker">已归档</string>
+    <string name="err_history_archive">没能归档这段对话。</string>
+    <string name="history_delete">删除</string>
+    <string name="history_in_use">当前对话</string>
+    <string name="history_search_hint">搜索聊天记录</string>
+    <string name="history_nothing_found">没有匹配的内容。</string>
+    <string name="history_clear_search">清除搜索</string>
+    <string name="history_reading">正在读取…</string>
+    <string name="history_empty_body">开始一段对话，这里就会出现记录。</string>
+    <string name="history_delete_title">删除「%1$s」？</string>
+
+    <!-- 备份与恢复 -->
+    <string name="backup_export_all">导出全部对话</string>
+    <string name="backup_export_subject">全部对话</string>
+    <string name="backup_import">导入对话</string>
+    <string name="backup_nothing_to_export">还没有对话可以导出。</string>
+    <string name="backup_import_result">导入了 %1$d 段对话，%2$d 段已经在这台设备上。</string>
+    <string name="backup_import_none">这份备份里没有可用的对话。</string>
+    <string name="backup_import_too_new">这份备份来自更新的版本（第 %1$d 版），这个版本读不了。</string>
+    <string name="backup_import_unreadable">这个文件不是这个应用导出的备份。</string>
+    <string name="backup_import_partial">有 %1$d 段没能导入。</string>
+    <string name="backup_import_empty_dropped">另有 %1$d 段是空的，没有导入。</string>
+    <string name="backup_import_only_empty">这份备份里只有空对话，没有可导入的内容。</string>
+    <string name="err_backup_import">导入失败。</string>
+    <string name="backup_explainer">对话不会同步到任何地方。要换手机，先在这里导出，再到新手机上导入。</string>
+    <string name="history_delete_body">这段对话没有别的副本，删除后无法恢复。</string>
+    <string name="history_rename_title">重命名</string>
+    <string name="history_rename_label">名称</string>
+    <string name="history_rename_save">保存</string>
+    <string name="history_rename_cancel">取消</string>
+    <string name="history_unreadable">有 %1$d 段对话在这台设备上读不出来了，它们没有出现在列表里。文件还在，也不会被删掉，但解开它们的密钥已经不在了——通常是清除应用数据、或换设备恢复备份造成的。</string>
+    <string name="history_share_title">分享这段对话</string>
+    <string name="history_message_count">%1$d 条消息</string>
+    <string name="history_when_just_now">刚刚</string>
+    <string name="history_when_minutes">%1$d 分钟前</string>
+    <string name="history_when_hours">%1$d 小时前</string>
+    <string name="history_when_days">%1$d 天前</string>
+
+    <!-- ========================================================== 设置页 === -->
+
+    <string name="settings_lock_title">应用锁</string>
+    <string name="settings_lock_on">打开应用时先验证身份</string>
+    <string name="settings_lock_off">关闭</string>
+    <string name="settings_lock_explainer">开启后，每次打开应用（或离开超过 15 分钟再回来）都要先通过指纹/人脸或锁屏密码。\n\n它挡的是别人拿起你已解锁的手机，不是加密。对话仍然存在应用私有目录里，取得 root 权限或整机备份的人仍能读到。</string>
+    <string name="settings_lock_unavailable">这台设备没录指纹、也没设锁屏密码，开了也没法验证。</string>
+    <string name="lock_title">NULL 已锁定</string>
+    <string name="lock_body">验证身份后打开。</string>
+    <string name="lock_action">解锁</string>
+    <string name="lock_failed">验证没通过。</string>
+    <string name="settings_title">设置</string>
+    <string name="settings_intro">这些设置会在下次加载模型或发送消息时生效。外观和字号立即生效。</string>
+    <string name="settings_dismiss">知道了</string>
+
+    <!-- 外观 -->
+    <string name="settings_timestamps_title">消息时间</string>
+    <string name="settings_timestamps_on">每条消息下面显示发送时间</string>
+    <string name="settings_timestamps_off">不显示</string>
+    <string name="settings_timestamps_explainer">默认不显示。你打字的时候知道是几点，而每条都带一行数字会把对话切碎。想对时间线的时候再打开。</string>
+    <string name="settings_appearance_title">外观</string>
+    <string name="settings_appearance_explainer">跟随系统，或者只让这个应用用浅色 / 深色。</string>
+    <string name="settings_theme_system">跟随系统</string>
+    <string name="settings_theme_light">浅色</string>
+    <string name="settings_theme_dark">深色</string>
+
+    <string name="settings_font_title">字号</string>
+    <string name="settings_font_explainer">在系统字号的基础上放大或缩小。下面这段文字会跟着变，方便你对着调。</string>
+    <string name="settings_font_sample">这是正文的样子。中文、English、12345 都会按这个字号显示。</string>
+    <string name="settings_font_custom">设置为 %1$d%%，这个版本没有提供这个选项。</string>
+
+    <string name="settings_backend_title">运行在</string>
+    <string name="settings_backend_explainer">模型使用哪个处理器。如果设备跑不了你选的硬件，会自动回退，而不是直接失败。</string>
+    <string name="settings_backend_none">当前没有加载模型。</string>
+    <string name="settings_backend_running">现在运行在%1$s上。</string>
+    <string name="settings_backend_fell_back">你选的是%1$s，但这台设备实际跑在%2$s上。</string>
+    <string name="settings_backend_auto">自动选择这台设备能用的方式。</string>
+
+    <string name="settings_prompt_title">告诉模型它是什么</string>
+    <string name="settings_prompt_explainer">每段对话开始时都会发给模型。它决定了模型是在回答你的问题，还是自顾自地往下写。</string>
+    <string name="settings_prompt_label">指令</string>
+    <string name="settings_prompt_edit">修改</string>
+    <string name="settings_prompt_save">保存</string>
+    <string name="settings_prompt_cancel">取消</string>
+    <string name="settings_prompt_reset">用回默认</string>
+    <string name="settings_prompt_save_as">存为预设</string>
+    <string name="settings_prompt_save_as_title">存为预设</string>
+    <string name="settings_prompt_save_as_hint">起个名字，下次一点就能用</string>
+    <string name="settings_prompt_save_as_confirm">保存</string>
+    <string name="settings_prompt_save_as_cancel">取消</string>
+    <string name="settings_prompt_mine">我保存的</string>
+    <string name="settings_prompt_delete">删除预设「%1$s」？</string>
+    <string name="settings_prompt_delete_confirm">删除</string>
+    <string name="settings_prompt_presets_hint">选一个填进去，之后还能自己改。</string>
+    <string name="preset_general">通用</string>
+    <string name="preset_general_body">你是一个乐于助人的助手。用简体中文回答，直接、简短。如果不知道答案，就直说不知道，不要编造。</string>
+    <string name="preset_translate">翻译</string>
+    <string name="preset_translate_body">你是一个翻译。把用户给你的内容译成简体中文；如果本来就是中文，译成英文。只给出译文，不要解释、不要加注释。</string>
+    <string name="preset_code">写代码</string>
+    <string name="preset_code_body">你是一个程序员助手。给出能直接运行的代码，配最少的说明。代码里不要写注释，注释用中文放在代码外面。</string>
+    <string name="preset_explain">讲解</string>
+    <string name="preset_explain_body">你是一个老师。用简体中文把概念讲清楚，先说结论，再打一个日常生活的比方。不要堆砌术语。</string>
+    <string name="preset_short">极简</string>
+    <string name="preset_short_body">只给答案，不要铺垫、不要复述问题、不要总结。能用一个字回答就不要用两个字。</string>
+    <string name="settings_prompt_needs_reload">已经有模型在运行。重新加载模型后才会生效。</string>
+
+    <string name="settings_replies_title">回答</string>
+    <string name="settings_replies_explainer">限制写多少，以及用词有多灵活。</string>
+    <string name="settings_length_title">最长回答</string>
+    <string name="settings_length_explainer">单位是 token，大约相当于四分之三个字。达到上限时回答会被截断，而不是写完。</string>
+    <string name="settings_length_custom">设置为 %1$d，这个版本没有提供这个选项。</string>
+    <string name="settings_temperature_title">灵活程度</string>
+    <string name="settings_temperature_custom">设置为 %1$s，这个版本没有提供这个选项。</string>
+    <string name="settings_temperature_flat">总是选最可能的那个词。结果稳定，但有时显得呆板。</string>
+    <string name="settings_temperature_close">用词贴近最可能的写法。适合你想要可靠答案的问题。</string>
+    <string name="settings_temperature_balanced">一个平衡值。大多数聊天模型默认就是这个范围。</string>
+    <string name="settings_temperature_wild">用词更自由。变化更多，也更容易跑题。</string>
+    <string name="settings_replies_when">回答长度对下一条消息立刻生效。灵活程度在加载模型时确定，所以要重新加载模型才会生效。</string>
+
+    <!-- ========================================================== 关于页 === -->
+
+    <string name="about_signature_title">这份副本的签名</string>
+    <string name="about_signature_body">对着公开页面上写的指纹比一下。一样，就是本项目签的；不一样，说明这个安装包是别人重新打过包的——功能看着一样，但里面可以多任何东西。</string>
+    <string name="about_signature_none">读不出这份副本的签名。</string>
+    <string name="about_signature_unknown">本项目还没记录发布密钥，所以现在只能显示、不能自动比对。发布之后这里会填上，对不上就会直接告诉你。</string>
+    <string name="about_signature_other">这份副本不是本项目签的。签名是：</string>
+    <string name="about_title">关于</string>
+    <string name="about_intro">一个完全在这台手机上运行语言模型的聊天应用。没有账号，没有服务器，没有统计。</string>
+
+    <string name="about_wont_do_title">它不会做什么</string>
+    <string name="about_wont_do_body">你输入的所有内容都留在这里。模型在这台设备上运行。唯一用到网络的时候，是下载你主动选择的模型，那次请求不会带上任何关于你的信息。</string>
+
+    <string name="about_keeps_title">它保存什么</string>
+    <string name="about_keeps_body">你的对话、你下载的模型，以及你在设置里做过的选择。全部在这个应用的私有目录里，其他应用读不到。也不会同步到云端备份。</string>
+
+    <string name="about_built_from_title">它由什么构成</string>
+    <string name="about_built_from_body">开源。每一个库、每一个模型都在允许再分发的许可证之下，每次构建前都会自动检查。模型从发布方下载而不是打包进来，所以许可证仍然是他们的。</string>
+
+    <string name="about_storage_title">这台设备上的占用</string>
+    <string name="about_storage_conversations">对话</string>
+    <string name="about_storage_models">模型</string>
+    <string name="about_storage_total">合计：%1$s</string>
+    <string name="about_storage_value">%1$d 段 · %2$s</string>
+    <string name="about_reading">正在读取…</string>
+
+    <string name="about_wipe_title">擦除剩余空间</string>
+    <string name="about_wipe_body">删除只是让文件不再出现，不代表那些字节没了。NAND 闪存由控制器管着，它会重映射写入、还留备用块，所以覆写不保证写到原来那些块上。唯一的办法是把剩余空间整个写一遍，而那是有代价的。</string>
+    <string name="about_wipe_cost">跑起来会磨损闪存、拖慢整台设备、耗电；手机上剩余空间可能有几十 GB，可能要跑很久。值不值得，看你在防谁。</string>
+    <string name="about_wipe_action">写入 2 GB 随机数据</string>
+    <string name="about_wipe_running">正在写…</string>
+    <string name="about_wipe_done">写了 %1$s。这只做过一遍——写第二遍不会更安全。</string>
+    <string name="about_wipe_hint">应用私有的存储本来就由系统按设备锁加密。这台设备解锁着、又拿到 root 权限的人，仍然读得到。</string>
+    <string name="about_erase">清空这台设备上的所有数据</string>
+    <string name="about_diagnostics">导出诊断信息</string>
+    <string name="about_diagnostics_hint">出问题的时候，导出一份发给开发者。里面是版本、设备、内存、模型和报错信息——没有你的对话内容，导出前你可以先看。</string>
+    <string name="about_diagnostics_subject">NULL 诊断信息</string>
+    <string name="about_diagnostics_heading">诊断信息</string>
+    <string name="about_diagnostics_app">应用</string>
+    <string name="about_diagnostics_android">系统</string>
+    <string name="about_diagnostics_soc">处理器</string>
+    <string name="about_diagnostics_device">设备</string>
+    <string name="about_diagnostics_memory">可用内存</string>
+    <string name="about_diagnostics_heap">堆</string>
+    <string name="about_diagnostics_model">模型</string>
+    <string name="about_diagnostics_backend">处理器</string>
+    <string name="about_diagnostics_context">上下文</string>
+    <string name="about_diagnostics_conversations">对话</string>
+    <string name="about_diagnostics_models">已装模型</string>
+    <string name="about_diagnostics_last_error">最近一次报错</string>
+    <string name="about_diagnostics_last_crash">最近一次崩溃</string>
+    <string name="about_diagnostics_no_error">这次运行没有报错记录。</string>
+    <string name="about_diagnostics_none">没有</string>
+    <string name="about_diagnostics_footer">这份信息由你在设备上生成，没有发送到任何地方。已隐去路径、地址和长串密钥；不含对话内容。</string>
+    <string name="about_erase_hint">删除所有对话和所有已下载的模型。模型可以重新下载，对话无法恢复。</string>
+    <string name="about_erase_nothing">没有可以清除的数据。</string>
+    <string name="about_erase_title">全部清除？</string>
+    <string name="about_erase_body">这会删除 %1$d 段对话和 %2$s 的模型。数据没有发送到任何地方，所以也没有副本可以恢复。下载的模型可以重新获取，你输入的内容不能。</string>
+    <string name="about_erase_confirm">清除</string>
+    <string name="about_erase_cancel">取消</string>
+
+    <!--
+      免责声明。应用的运行不依赖网络，所以这段文字必须在应用里：放在网站上的
+      文档，从它所描述的那台设备上打不开。
+    -->
+    <string name="about_disclaimer_title">使用前请了解</string>
+    <string name="about_disclaimer_warranty">这个应用按现状提供，不附带任何担保。它不是专业建议，不能用于医疗、法律、财务或安全相关的决定。</string>
+    <string name="about_disclaimer_authorship">每一条回答都是你选择的模型在这台设备上生成的，没有任何参与开发的人写过、审过或认可过它。中间没有服务器，所以没有人能审核它对你说的话——保证你对话隐私的正是这一点，而它有两面。小模型会自信地说错话。</string>
+    <string name="about_disclaimer_trademark">模型名称是其所有者的商标。Hugging Face、Qwen、Gemma、Phi 属于发布它们的公司，它们与本应用没有关联，也没有为其背书。</string>
+    <string name="about_disclaimer_more">完整内容见源码仓库中的 DISCLAIMER.md 和 docs/legal/TRADEMARKS-AND-CLAIMS.md。使用本应用即表示你接受它们。</string>
+
+    <!-- ========================================================== 通用 === -->
+
+
+    <string name="backend_auto">自动</string>
+    <string name="backend_cpu">处理器</string>
+    <string name="backend_gpu">图形处理器</string>
+    <string name="backend_npu">神经网络处理器</string>
+    <string name="backend_auto_explain">让应用自己选，跑不动会自动回退。</string>
+    <string name="backend_cpu_explain">最慢，但几乎所有设备都能跑。</string>
+    <string name="backend_gpu_explain">用图形处理器加速，速度快很多。</string>
+    <string name="backend_npu_explain">最快的路径，需要专为该芯片编译的模型。</string>
+
+    <string name="language_chinese">中文</string>
+    <string name="language_english">英语</string>
+    <string name="language_multilingual">多语言</string>
+
+    <!--
+      How a model picks its words, per model.
+
+      Named choices rather than four sliders: the sampler has four numbers, and a
+      wall of dials is a user making a small model worse. The names say what a
+      person wants, not what a sampler does.
+    -->
+    <string name="sampling_title">说法方式</string>
+    <string name="sampling_precise">稳一点</string>
+    <string name="sampling_precise_hint">回答更确定、更贴题，措辞变化少。总是绕圈或跑题时用。</string>
+    <string name="sampling_balanced">默认</string>
+    <string name="sampling_balanced_hint">出厂设置，也是这几个小模型发布方推荐的值。</string>
+    <string name="sampling_varied">放得开</string>
+    <string name="sampling_varied_hint">措辞更活泼，适合写东西。小模型用这个可能变得不连贯。</string>
+</resources>

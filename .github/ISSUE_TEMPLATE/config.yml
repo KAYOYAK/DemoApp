@@ -1,0 +1,11 @@
+# Issue and pull-request templates.
+#
+# Forms (not the older Markdown templates) are used deliberately: a bug report
+# that arrives without the app version and Android version usually cannot be
+# acted on, and asking for them in a form is what makes people supply them.
+blank_issues_enabled: false
+
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/KAYOYAK/<REPO_NAME>/security/advisories/new
+    about: Please report security issues privately, not as a public issue.

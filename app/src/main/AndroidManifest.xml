@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        The only permission this application declares.
+
+        It exists for exactly one purpose: ModelDownloader downloading a model
+        file. Nothing else in the app makes a network request, and the app is
+        expected to work fully with the network switched off once a model is on
+        the device.
+
+        Adding a second permission is a decision that requires a written reason
+        in scripts/check-privacy.ps1 and an update to PRIVACY.md. See
+        docs/PRINCIPLES.md.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:name=".DemoApplication"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:windowSoftInputMode="adjustResize"
+        android:theme="@style/Theme.DemoApp">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!--
+                Text shared from another app.
+
+                This is the returning half of the promise the About screen makes:
+                nothing this app does sends your words anywhere, so the only way
+                to bring something in is for you to hand it over. Without this the
+                user copies a paragraph, switches apps, and pastes it — which is
+                the same act with three more steps and one more place the text has
+                been.
+
+                Plain text only, and deliberately not ACTION_SEND_MULTIPLE: a
+                question here is one thing to ask about, and accepting a list
+                would mean inventing a behaviour for the rest of it.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity>
+    </application>
+
+</manifest>

@@ -1,0 +1,55 @@
+{
+  "$comment": [
+    "Third-party notices embedded inside the AARs this app ships.",
+    "",
+    "The dependency licence check reads each artifact's POM. That is not enough:",
+    "an AAR's native libraries can statically link code whose licence appears",
+    "nowhere in the POM, and the only record of it is a notice file packed inside",
+    "the AAR itself. This file is where those notices are acknowledged.",
+    "",
+    "A finding that is acknowledged here is printed on every run and does not fail",
+    "the build. A finding that is NOT here fails it.",
+    ""
+  ],
+  "acknowledged": [
+    {
+      "artifact": "com.google.ai.edge.litertlm:litertlm-android:0.18.0",
+      "notice": "THIRD_PARTY_NOTICE.txt",
+      "component": "Google Runtime Environment",
+      "licence": "GPL-2.0",
+      "status": "unresolved",
+      "question": "The notice file packed inside this AAR lists a component called 'Google Runtime Environment' under GNU GPL version 2. The artefact does not say whether that component is linked into jni/*/liblitertlm_jni.so, which this app redistributes, or whether it is part of the environment the library was built in and is listed for completeness. Google publishes LiteRT-LM itself under Apache-2.0, which makes the second reading more likely, but 'more likely' is not a legal position.",
+      "why_it_is_recorded_rather_than_dismissed": "The whole point of the legal constraint is that a licence obligation attaches to every copy already distributed and cannot be repaired afterwards. Guessing that a GPL notice is probably not about shipped code is exactly the guess that cannot be taken back.",
+      "what_would_resolve_it": [
+        "A statement from the library's publisher that the component is build-time only, or",
+        "an inventory of the symbols and objects linked into liblitertlm_jni.so that shows no GPL component, or",
+        "a decision to treat LiteRT-LM itself as GPL-encumbered and license this project accordingly."
+      ],
+      "scope": "Blocks publishing a release build. Does not block development or testing.",
+      "recorded_on": "2026-10-12"
+    },
+    {
+      "artifact": "com.google.ai.edge.litertlm:litertlm-android:0.18.0",
+      "notice": "THIRD_PARTY_NOTICE.txt",
+      "component": "Following applies to ./etc/roots.pem",
+      "licence": "MPL-2.0",
+      "status": "accepted",
+      "reasoning": "This is a CA certificate bundle, not linked code. MPL-2.0's obligations attach to source files of the licensed work; a data file included unmodified carries the licence notice and nothing more. The notice is present, which is the obligation.",
+      "recorded_on": "2026-10-12"
+    },
+    {
+      "artifact": "com.google.ai.edge.litertlm:litertlm-android:0.18.0",
+      "notice": "THIRD_PARTY_NOTICE.txt",
+      "component": "Files (EPL-1.0 section)",
+      "licence": "EPL-1.0",
+      "status": "unresolved",
+      "question": "The notice contains an Eclipse Public License 1.0 section whose component heading could not be read unambiguously from the packed text; the surrounding lines name no product. EPL-1.0 is weak copyleft with a patent-retaliation clause, and the notice does not say what it covers.",
+      "why_it_is_recorded_rather_than_dismissed": "Same reasoning as the GPL entry: the obligation attaches at distribution.",
+      "what_would_resolve_it": [
+        "Reading the notice around that heading as it appears in the publisher's own repository, where the formatting is intact."
+      ],
+      "scope": "Blocks publishing a release build.",
+      "recorded_on": "2026-10-12"
+    }
+  ]
+}

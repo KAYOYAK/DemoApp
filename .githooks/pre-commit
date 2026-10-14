@@ -1,0 +1,112 @@
+#!/bin/sh
+#
+# Pre-commit gate.
+#
+# The compliance gates also run in CI, but CI only sees a change after it has
+# been pushed. A licence or privacy violation caught here costs one edit; the
+# same violation caught after a release costs every copy already distributed.
+#
+# The gates resolve the Gradle dependency graph, which takes a few seconds even
+# with a warm cache. They therefore run only when a commit touches something
+# that can affect what they check. To run them anyway:
+#
+#     .githooks/pre-commit --all
+#
+# To bypass this hook: git commit --no-verify
+# Doing that to get past a real failure defeats the point of the project.
+
+set -e
+
+force=0
+[ "$1" = "--all" ] && force=1
+
+# Locate a PowerShell host. Git for Windows runs this script under its bundled
+# shell, so pwsh is normally on PATH; powershell.exe is the Windows fallback.
+if command -v pwsh >/dev/null 2>&1; then
+    PS=pwsh
+elif command -v powershell.exe >/dev/null 2>&1; then
+    PS=powershell.exe
+else
+    echo "pre-commit: no PowerShell host found; skipping compliance gates."
+    echo "pre-commit: install PowerShell 7 to enable them."
+    exit 0
+fi
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+
+need_licence=0
+need_privacy=0
+need_notices=0
+need_pins=0
+
+if [ "$force" -eq 1 ]; then
+    need_licence=1
+    need_privacy=1
+    need_notices=1
+    need_pins=1
+else
+    # Anything that can change the set of resolved dependencies.
+    if echo "$staged" | grep -qE '(^|/)(build\.gradle(\.kts)?|settings\.gradle(\.kts)?|libs\.versions\.toml|gradle\.properties|gradle-wrapper\.properties)$'; then
+        need_licence=1
+        # The embedded-notice walk also reads the resolved classpath: a new AAR
+        # can carry a licence obligation its POM does not mention.
+        need_notices=1
+    fi
+    # Anything that can change declared permissions or the network posture.
+    if echo "$staged" | grep -qE '(^|/)AndroidManifest\.xml$|(^|/)check-privacy\.ps1$'; then
+        need_privacy=1
+    fi
+    # A digest is a claim about bytes that are not in this repository, and the
+    # publisher can falsify it at any time by replacing the file. It happened on
+    # 2026-10-13, to the first model in the ladder. This is the only gate here that
+    # needs the network, so it is the only one that can be skipped by being offline --
+    # it says so rather than failing.
+    if echo "$staged" | grep -qE '(^|/)ModelCatalogue\.kt$|(^|/)check-model-pins\.ps1$'; then
+        need_pins=1
+    fi
+fi
+
+status=0
+
+if [ "$need_licence" -eq 1 ]; then
+    echo "pre-commit: dependency licence gate ..."
+    if ! "$PS" -NoProfile -ExecutionPolicy Bypass -File scripts/check-licenses.ps1; then
+        status=1
+    fi
+fi
+
+if [ "$need_notices" -eq 1 ]; then
+    echo "pre-commit: embedded notices gate ..."
+    if ! "$PS" -NoProfile -ExecutionPolicy Bypass -File scripts/check-embedded-notices.ps1; then
+        status=1
+    fi
+fi
+
+if [ "$need_privacy" -eq 1 ]; then
+    echo "pre-commit: privacy contract gate ..."
+    if ! "$PS" -NoProfile -ExecutionPolicy Bypass -File scripts/check-privacy.ps1; then
+        status=1
+    fi
+fi
+
+if [ "$need_pins" -eq 1 ]; then
+    echo "pre-commit: model pin check ..."
+    if ! "$PS" -NoProfile -ExecutionPolicy Bypass -File scripts/check-model-pins.ps1; then
+        status=1
+    fi
+fi
+
+if [ "$status" -ne 0 ]; then
+    echo ""
+    echo "pre-commit: BLOCKED."
+    echo ""
+    echo "One of the project's non-negotiable constraints is not satisfied."
+    echo "See docs/PRINCIPLES.md for what they are and why they are non-negotiable."
+    echo ""
+    echo "Fix the change. Do not bypass this hook to get a commit through,"
+    echo "and do not relax a gate to make it pass."
+    echo ""
+    exit 1
+fi
+
+exit 0

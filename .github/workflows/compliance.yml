@@ -1,0 +1,215 @@
+name: Compliance
+
+# The gates that encode obligations which cannot be fixed after release:
+#
+#   * a licence problem attaches to every copy already distributed, so it has to
+#     be caught before the build, not after;
+#   * a privacy claim that is only written down is not a claim, so the
+#     permissions and the dependency graph are checked on every change;
+#   * a disclaimer or an attribution that is missing is one a user cannot rely
+#     on and a claimant is entitled to treat as absent, so the documents, the
+#     credit given to every model publisher, and the notice the app itself shows
+#     are checked together.
+#
+# All eight gates run here. This list used to be four, and the two that were
+# missing -- the embedded-notice walk and the screen-wiring check -- existed,
+# passed when run by hand, and were enforced by nothing. A gate no pipeline runs
+# is a comment.
+#
+# The mutation sweep is the ninth thing this workflow enforces and the only one
+# that is not a gate: it breaks one behaviour at a time in the product source and
+# asks whether any test notices. It is here because it had the same defect as the
+# two above, in its worst form -- it ran by hand, took half an hour, printed a
+# survivor list, and exited 0 whatever it found.
+#
+# The model-pin check is deliberately NOT here. It is the one check that needs the
+# network, and these gates have to keep working on a machine that has none; it lives
+# in `.github/workflows/model-pins.yml`.
+#
+# Every gate is also runnable locally:
+#   scripts/check-licenses.ps1
+#   scripts/check-privacy.ps1
+#   scripts/check-embedded-notices.ps1
+#   scripts/check-legal-docs.ps1
+#   scripts/check-ui-copy.ps1
+#   scripts/check-ui-wiring.ps1
+#   scripts/check-callback-reachability.ps1
+#   scripts/check-unused-strings.ps1
+#   scripts/mutation-sweep.ps1
+#   scripts/check-model-pins.ps1   (needs the network)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: compliance-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  compliance:
+    name: Licence, privacy, and legal-document gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # Verifies two things at once: that no dependency carries a licence
+      # outside compliance/allowed-licenses.json, and that the committed lock
+      # file still matches the resolved graph. A dependency change that was not
+      # accompanied by a regenerated lock fails here.
+      - name: Dependency licence gate
+        shell: pwsh
+        run: ./scripts/check-licenses.ps1
+
+      # Verifies the permission set and that no telemetry library is reachable
+      # from the release runtime classpath.
+      - name: Privacy contract gate
+        shell: pwsh
+        run: ./scripts/check-privacy.ps1
+
+      # Walks the release classpath and reads the notice files packed inside the
+      # AARs. The licence gate reads POMs, and a native library can statically
+      # link code whose licence appears nowhere in one -- the only record is a
+      # notice inside the artifact. A copyleft finding not recorded in
+      # compliance/embedded-notices.json fails here.
+      - name: Embedded notices gate
+        shell: pwsh
+        run: ./scripts/check-embedded-notices.ps1
+
+      # Verifies that every screen the navigation graph opens is passed each
+      # callback it declares, and that no callback-with-a-default is left
+      # unwired. Three features in this project were written, tested, and
+      # unreachable at once; this is the check that would have found them.
+      - name: Screen wiring gate
+        shell: pwsh
+        run: ./scripts/check-ui-wiring.ps1
+
+      # Verifies the other end of the same promise: that a callback a screen
+      # declares is invoked somewhere down the chain the screen hands its value
+      # to. The archive case was declared on every level, passed down through
+      # each one, and invoked at none of them; the screen-wiring gate passes that,
+      # because it checks what is passed and not what happens to it afterwards.
+      - name: Callback reachability gate
+        shell: pwsh
+        run: ./scripts/check-callback-reachability.ps1
+
+      # Verifies that every string in strings.xml is named by something. A
+      # sentence left behind by a wording revision is not broken, and that is the
+      # problem: this project's claim is that its promises are checked by scripts,
+      # and a strings file full of copy for features that were reworded away
+      # cannot be told apart from one holding a promise nobody wired.
+      - name: Unused copy gate
+        shell: pwsh
+        run: ./scripts/check-unused-strings.ps1
+
+      # Verifies that DISCLAIMER.md and the trademark and claims document exist
+      # and are linked, that every model publisher in the catalogue is credited
+      # by name, and that the app still shows a disclaimer offline. Adding a
+      # model from a new company without the attribution that goes with it is
+      # the most likely way this project infringes something by accident.
+      - name: Legal documents gate
+        shell: pwsh
+        run: ./scripts/check-legal-docs.ps1
+
+      # Verifies that no word a person reads is written in Kotlin. The app is in
+      # Chinese and has no translation layer, so a message assembled from a
+      # literal is a message in the wrong language -- and it happens quietly: the
+      # screen looks finished and one status line is not. UiMessage makes most of
+      # it impossible by type; this catches the rest.
+      - name: User-facing copy gate
+        shell: pwsh
+        run: ./scripts/check-ui-copy.ps1
+
+      # Cheap regression guard: if either generated file is stale, the attribution
+      # shipped with the next release would be wrong.
+      #
+      # Both files, because `-Update` writes both. It used to check only
+      # `THIRD_PARTY_LICENSES.md`, and `compliance/licenses.lock.json` is the other
+      # half: a change that alters the lock without altering the rendered notice --
+      # a version bump that keeps the same licence, an artifact the notice does not
+      # list -- would have passed here, and the check would have looked like it was
+      # covering the case it named.
+      #
+      # It is also worth knowing what this is not: `check-licenses.ps1` without
+      # `-Update` verifies the lock against the resolved classpath and writes nothing,
+      # so running it twice in a row always passes. Comparing the files before and
+      # after `-Update` is the only version that can fail, and it has to name every
+      # file `-Update` writes.
+      - name: Generated attribution is current
+        shell: pwsh
+        run: |
+          $tracked = @('THIRD_PARTY_LICENSES.md', 'compliance/licenses.lock.json')
+          $before = @{}
+          foreach ($f in $tracked) { $before[$f] = (Get-FileHash $f -Algorithm SHA256).Hash }
+
+          ./scripts/check-licenses.ps1 -Update | Out-Null
+
+          $stale = @()
+          foreach ($f in $tracked) {
+            if ((Get-FileHash $f -Algorithm SHA256).Hash -ne $before[$f]) { $stale += $f }
+          }
+
+          if ($stale.Count -gt 0) {
+            Write-Host "::error::$($stale -join ' and ') stale. Run scripts/check-licenses.ps1 -Update and commit the result."
+            exit 1
+          }
+          Write-Host "Generated attribution and lock are current."
+
+  # A separate job because it is the slow one and the only one that writes to the
+  # product source while it runs: every mutation is a source edit followed by a full
+  # unit-test run, and all anchors are checked before the first one is planted. It is
+  # kept in this workflow rather than in its own because it enforces the same kind of
+  # obligation -- a comment asserting a behaviour is not a test asserting it.
+  #
+  # It also fails the build now. It used to print its summary and exit 0, so the
+  # survivor list was advisory text at the end of a half-hour log. Five anchors had
+  # gone stale underneath it without anyone noticing, for exactly that reason.
+  sweep:
+    name: Mutation sweep
+    runs-on: ubuntu-latest
+    # Measured locally: ~6 s per unit-test run, a baseline with three attempts allowed,
+    # and one `app:clean` per discarded round. The budget is deliberately loose -- a
+    # sweep that times out tells you nothing about the tree, and a sweep that reports a
+    # survivor tells you something specific.
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: A mutation nobody notices fails the build
+        shell: pwsh
+        run: ./scripts/mutation-sweep.ps1

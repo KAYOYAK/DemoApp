@@ -1,0 +1,59 @@
+name: Model pins
+
+# A model the app offers is only installable while the digest in the catalogue still
+# matches the bytes its provider is serving. `ModelDownloader.verify` refuses anything
+# else -- correctly -- deletes the file, and tells the user to download it again, which
+# fails the same way.
+#
+# That is not hypothetical: on 2026-10-13 the publisher of `litert-community/Qwen3-0.6B`
+# replaced both of the files this app pins under their existing names. The INT4 entry,
+# which is the first rung of the ladder and what someone who has not chosen yet ends up
+# with, came back the same length with different contents, so a user would transfer all
+# 344 MB before being refused. The other entry changed length, so it failed on the first
+# byte-count check. Nothing in this project could have noticed either one.
+#
+# This runs here rather than in `compliance.yml` because it is the only check that needs
+# the network, and the compliance gates are the ones that must keep working on a machine
+# that has none.
+#
+# It also runs on a schedule: the pins rot on the provider's clock, not on this
+# repository's, so a tree nobody touches can still be broken by someone else's upload.
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'app/src/main/java/com/example/demoapp/model/ModelCatalogue.kt'
+      - 'scripts/check-model-pins.ps1'
+      - '.github/workflows/model-pins.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'app/src/main/java/com/example/demoapp/model/ModelCatalogue.kt'
+      - 'scripts/check-model-pins.ps1'
+      - '.github/workflows/model-pins.yml'
+  schedule:
+    # 06:17 UTC daily, off the hour so it does not pile onto whatever else runs at :00.
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: model-pins-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pins:
+    name: Catalogue digests against the providers
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Compare every pinned digest with what is published
+        shell: pwsh
+        run: ./scripts/check-model-pins.ps1

@@ -1,0 +1,42 @@
+# Keeps dependencies current without you watching for updates.
+#
+# Dependabot security updates (alerts for a known-vulnerable dependency) are a
+# separate repository setting, not a file: enable them under
+# Settings -> Code security -> Dependabot alerts / security updates.
+version: 2
+
+updates:
+  # Gradle dependencies, including the versions declared in
+  # gradle/libs.versions.toml and the plugin versions.
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    groups:
+      # One PR for the whole AndroidX family instead of fifteen. AndroidX
+      # artefacts are released together and must normally move together.
+      androidx:
+        patterns:
+          - "androidx.*"
+      kotlin-and-compose:
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "org.jetbrains.compose*"
+      # Anything else stays individual so a breaking change is easy to isolate.
+    ignore:
+      # AGP and Gradle must move together with the Android SDK; bump these
+      # deliberately rather than automatically.
+      - dependency-name: "com.android.tools.build:gradle"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"

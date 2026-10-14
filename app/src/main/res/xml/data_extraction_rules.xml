@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Nothing is backed up, on Android 12 or higher.
+
+    This file is not optional and it is not decoration. On Android 12 the
+    platform deprecated `android:allowBackup` and split backup into cloud backup
+    and device-to-device transfer; a rule file for that version is what decides
+    the latter. From the platform documentation:
+
+        "In Android 12 and higher, these attributes have been deprecated and
+        will only apply to cloud backups."
+
+        "If there are no rules for a particular backup mode, such as if the
+        <device-transfer> section is missing, that mode is fully enabled for all
+        content except for no-backup and cache directories."
+
+    So without this file there is no rule for device transfer, and the default
+    for a mode with no rule is *everything*: it would carry the conversations,
+    the model registry and the settings onto a new phone during setup.
+    PRIVACY.md says "There is no sync, no backup to a server, and no remote
+    configuration", and a phone-to-phone transfer is not a server, which is
+    exactly why the sentence alone does not cover it.
+
+    Excluding rather than omitting, and excluding from both modes explicitly. An
+    empty <cloud-backup> or a missing <device-transfer> is not "nothing": it is
+    whichever default the platform applies to the mode that has no rule, and
+    this app wants neither of them to have one.
+
+    `allowBackup="false"` and `fullBackupContent="false"` remain in the manifest
+    for Android 11 and lower, where they are the attributes that apply.
+-->
+<data-extraction-rules>
+    <!-- To the user's Google Drive. -->
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+
+    <!-- To another phone, during setup. Not a server, so the privacy sentence
+         does not mention it, and it takes exactly the same data. -->
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

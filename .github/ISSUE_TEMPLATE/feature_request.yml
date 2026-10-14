@@ -1,0 +1,54 @@
+name: Feature request
+description: Suggest a capability the app does not have yet.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature requests are easiest to evaluate when they describe a *problem*
+        rather than a specific implementation — the underlying need often has a
+        simpler answer than the one first imagined.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched the existing issues and this is not a duplicate.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the situation you are in, not the solution you have in mind.
+      placeholder: "I keep having to ... and there is no way to ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you have considered
+      description: Including any workaround you currently use.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you be willing to work on this?
+      options:
+        - "Yes, I can open a pull request"
+        - "Yes, with some guidance"
+        - "No, I am only reporting the idea"
+    validations:
+      required: true

@@ -1,0 +1,93 @@
+name: Bug report
+description: Something is broken or behaves differently from what you expected.
+title: "[Bug] "
+labels: ["bug", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+
+        Before filing, please check the [existing issues](../../issues?q=is%3Aissue)
+        in case it is already known.
+
+        If this is a security problem, do **not** use this form — see
+        [SECURITY.md](../../blob/main/SECURITY.md).
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched the existing issues and this is not a duplicate.
+          required: true
+        - label: I am running a build from this repository's own releases or a local build of the current default branch.
+          required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Describe the behaviour you actually observed.
+      placeholder: "When I tap X, the screen goes blank instead of showing Y."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps. A bug that cannot be reproduced usually cannot be fixed.
+      placeholder: |
+        1. Open the app
+        2. Tap ...
+        3. See error
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      description: Shown in the release name, or `versionName` in app/build.gradle.kts.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: android-version
+    attributes:
+      label: Android version and device
+      placeholder: "Android 16 (API 36), Pixel 7"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-source
+    attributes:
+      label: How did you install it?
+      options:
+        - A release APK from this repository
+        - Built locally from source
+        - An emulator
+        - Other (describe below)
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: |
+        `adb logcat` output around the failure is the most useful thing you can
+        attach. Screenshots help too.
+      render: shell
+    validations:
+      required: false
