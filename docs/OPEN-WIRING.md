@@ -1587,14 +1587,65 @@ find in other tools — a pass over nothing is not a pass — and it is fixed: t
 way, and `build-logs\stress-b1f` is the batch that leaves one — `150 runs: 150 executed and passed, 0 did
 not pass`, above the class filter, the finish time and the machine tag, the same four lines whether the
 batch is clean or not. The rate kept falling as the window grew, 385 ms to 785 ms to 3,185 ms, from
-`3 in 40` to `1 in 60` to `1 in 150` and then to none in the two batches after that — and the script
-prints its own caveat, which is the right one: *No failure in this batch. That is a result about this
-machine, not about the code.* Zero in three hundred runs bounds the rate at about one percent (three over
-n) rather than at zero, and
-`lastMoveRefusal` never fired in these runs, so the reason the file system gives is still
-unobserved. What the batch buys is a smaller guess, not a closed question: the flake is closed by an
-occurrence that names its reason, or by a rate low enough that CI never sees it — and only the
-second of those is something a batch can show.
+`3 in 40` to `1 in 60` to `1 in 150` and then to none in the two batches after that, and every one of
+those batches ended with the same caveat: *No failure in this batch. That is a result about this machine,
+not about the code.* Zero in three hundred runs bounds the *failure* rate at about one percent (three over
+n) rather than at zero — and zero failures turned out not to be zero refusals. The caveat is what a batch
+says when it has nothing else to say; the script now also reports whether the refusal watch saw a refused
+move, because the number that was missing all along is the one the next section measured: seven refusals
+in one hundred and fifty runs, none of which outlived the window, with `lastMoveRefusal` empty through all
+of them — it is written only when the retries run out. What those batches could not show was the reason,
+and what they bought was a window wide enough that no user met one.
+
+## What the refusal watch found, and what it found in itself
+
+**The watch is one system property.** `demoapp.refusalWatch`, forwarded by `app/build.gradle.kts` into the
+forked test JVM and passed by `scripts/stress-flake.ps1`, makes a move the file system refused and a later
+attempt made fail a test and name its reason —
+`absorbed: AccessDeniedException reason=none given after 2 attempts in 10ms`. With the property unset,
+which is what CI runs, the same refusal is counted in `SaveAudit.absorbedMoveRefusals` with its account in
+`SaveAudit.lastAbsorbedMoveRefusal` and changes nothing: a save that landed is not a failure. The window it
+is measuring is `FileChatStore.MOVE_RETRY_MILLIS`, `[10, 25, 50, 100, 200, 400, 800, 1600]` — nine
+attempts, 3,185 ms.
+
+**The first watched batch reported seven absorbed refusals and no failures** —
+`build-logs\stress-watch1`, `150 runs: 143 executed and passed, 7 did not pass` (the seven are the watch
+doing its job), finished 2026-10-15 22:19:43. That is one refusal in about every twenty-one runs, against
+zero that outlived the window, and it is the sentence the three batches above could not write. Two of the
+seven kept their account: `absorbed: AccessDeniedException reason=none given after 2 attempts in 10ms` in
+`a version change is written to disk` (round 10) and `… after 3 attempts in 35ms` in `opening a
+conversation from history seeds the model with it` (round 15). So the reason the three widenings were
+spent looking for is **`AccessDeniedException` with no reason given, gone by the first or second retry** —
+not a read-only target, not a full disk, and not something a wider window answers: the window is what made
+it invisible. The other five landed in `switching back to an earlier version changes what is shown`
+(rounds 103, 105, 111, 130) and `opening the conversation that is already open changes nothing` (116),
+which is the shape a refusal that arrives per unit of time would have inside a suite of seventy-five
+tests that rename files at different rates. Each round's own output is kept under
+`build-logs\stress-watch1\`.
+
+**Five of the seven accounts were missing, and that was the watch's own defect.** Those five read
+`1 time(s) in this test: no account`: the count and the account were two fields, the count written on the
+thread that makes the move and read on the test thread, so the count's store could become visible while
+the account's had not. `FileChatStore` holds them in one immutable `AbsorbedRefusals` behind a `@Volatile`
+field, and `saveAudit()` reads it once. The second half was the same defect one level up: the check ran
+first in `tearDown`, before the test had waited for the ViewModels it created, so it could read a count
+while the save it was asking about was still retrying — it runs last now, after the class has waited. A
+watch that can be wrong about the number it reports is the class of defect it was built to find, which is
+why both are written down here instead of fixed quietly.
+
+**The batch after the fix reported eleven more, and every one kept its account.** `build-logs\stress-watch2`
+— `150 runs: 139 executed and passed, 11 did not pass`, finished 2026-10-15 22:40:42 — and not one occurrence
+read `no account`: the count and the account are published as one value now, and eleven of eleven kept them
+together. Across the two watched batches that is eighteen refusals in three hundred runs, about one every
+seventeen, and all eighteen say the same thing: `absorbed: AccessDeniedException reason=none given`,
+recovered at the first retry (10 ms) or the second (35 ms). Nothing in either batch needed more than 35 ms
+of the 3,185 ms the window allows, which is the number the three widenings were guessing at. One round (40)
+refused two moves in two different tests, which is the shape of a condition of the machine rather than of
+one file: `switching back to an earlier version changes what is shown` absorbed seven, `the first message
+still names a conversation that has no name yet` three, `sending a message does not undo a pin` one. What
+this still does not measure is the rate a user meets — the suite renames files far more often than the app
+does — but it does say that a refusal which outlives the window is not the shape of the ones this machine
+produces.
 
 ## What the lock and the read-aloud path answer on a device
 

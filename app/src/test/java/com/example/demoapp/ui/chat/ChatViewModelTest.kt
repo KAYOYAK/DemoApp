@@ -206,11 +206,6 @@ class ChatViewModelTest {
 
     @After
     fun tearDown(): Unit = runBlocking {
-        // First, before anything that could throw and bury it: a refusal this test's saves
-        // recovered from, when the run is watching for one. See
-        // [refusalsAbsorbedByTheWindow].
-        refusalsAbsorbedByTheWindow()
-
         store.clear()
 
         // Wait for the ViewModels this test built to stop, and for the work they
@@ -244,6 +239,11 @@ class ChatViewModelTest {
 
         Dispatchers.resetMain()
         root.deleteRecursively()
+
+        // Last, so the saves this test started have landed and the read below sees a final
+        // number, and so a failure here cannot leave the main dispatcher swapped for the
+        // next test. See [refusalsAbsorbedByTheWindow].
+        refusalsAbsorbedByTheWindow()
     }
 
     /**
@@ -542,6 +542,16 @@ class ChatViewModelTest {
      * happen to wait on a save. It reads the store this class hands to the ViewModel, so a
      * refusal absorbed by a second store a test builds for itself is not seen here -- that
      * store's own audit is where it is recorded.
+     *
+     * The first batch run with this on reported seven recoveries, and two of the faults
+     * behind them were the instrument's own. Five read `1 time(s) in this test: no
+     * account`: the number and the account were two fields, written on the worker thread
+     * that makes the move and read here, and the number's store became visible while the
+     * account's had not -- `FileChatStore` publishes them as one value now. And this ran
+     * first in [tearDown], before the class waited for the ViewModels it built, so it
+     * could read a count while the save it was asking about was still retrying; it runs
+     * last now. Both are recorded in `docs/OPEN-WIRING.md`, because a watch that can be
+     * wrong about the number it reports is the same defect it was built to find.
      */
     private fun refusalsAbsorbedByTheWindow() {
         val audit = chatStore.saveAudit()

@@ -188,8 +188,9 @@ class FileChatStore(
          * the fact that none was given, and how many attempts waited how long, so
          * the next occurrence answers the question instead of widening a guess.
          *
-         * This is the half that got told. The refusals the window absorbs are the
-         * other half and leave nothing behind -- see [absorbedMoveRefusals].
+         * This is the half that got told. The refusals the window absorbs are the other
+         * half, and nothing reaches the caller for them at all, so they are recorded
+         * separately -- see [absorbedMoveRefusals].
          */
         val lastMoveRefusal: String?,
         /**
@@ -218,13 +219,23 @@ class FileChatStore(
     private var lastMoveRefusal: String? = null
 
     /**
-     * Refusals the retries recovered from.
+     * Refusals the retries recovered from, as one value.
      *
      * See [SaveAudit.absorbedMoveRefusals] for why the number is worth keeping: it is
      * the only record that a move was refused at all on a run where every save landed.
+     *
+     * The number and the account are one fact, and they are published as one object
+     * because as two fields they were caught apart: five of the seven recoveries the
+     * first watched batch reported read `1 time(s) in this test: no account`. The write
+     * happens on the worker thread that makes the move, the read on the test thread, and
+     * nothing orders two independent stores -- the number's cache line became visible
+     * while the account's still held null. A reader that sees the number must see the
+     * account that explains it.
      */
-    private var absorbedMoveRefusals = 0
-    private var lastAbsorbedMoveRefusal: String? = null
+    private class AbsorbedRefusals(val count: Int, val last: String?)
+
+    @Volatile
+    private var absorbedRefusals = AbsorbedRefusals(0, null)
 
     /**
      * The four counts, as they stand.
@@ -239,16 +250,20 @@ class FileChatStore(
      *
      * They are incremented in [save], under [writeLock], on the path each one names.
      */
-    internal fun saveAudit(): SaveAudit =
-        SaveAudit(
+    internal fun saveAudit(): SaveAudit {
+        // Read once. The number and the account are one value, and reading the field
+        // twice could pair a count from one recovery with the account of another.
+        val absorbed = absorbedRefusals
+        return SaveAudit(
             savesAttempted,
             savesRefusedAsDeleted,
             savesRefusedAsOlder,
             savesWritten,
             lastMoveRefusal,
-            absorbedMoveRefusals,
-            lastAbsorbedMoveRefusal,
+            absorbed.count,
+            absorbed.last,
         )
+    }
 
     private val json = Json {
         prettyPrint = true
@@ -366,8 +381,11 @@ class FileChatStore(
                 try {
                     moveFile(temp, target)
                     if (absorbed != null) {
-                        absorbedMoveRefusals++
-                        lastAbsorbedMoveRefusal = describeAbsorbedRefusal(absorbed, attempt)
+                        val soFar = absorbedRefusals
+                        absorbedRefusals = AbsorbedRefusals(
+                            soFar.count + 1,
+                            describeAbsorbedRefusal(absorbed, attempt),
+                        )
                     }
                     break
                 } catch (refused: IOException) {
