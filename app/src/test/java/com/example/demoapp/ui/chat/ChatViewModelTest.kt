@@ -423,13 +423,22 @@ class ChatViewModelTest {
             // stuck on its own lock, or never reached the call. A `saveNowCalls` of
             // zero points at the caller; a non-zero one with the store at zero points
             // at `saveLock`.
+            //
+            // `error` is the third side, added after a run in which `attempted` was
+            // greater than `written`: a save that entered the store and never finished.
+            // If that write threw, `saveNow` caught it and put the reason here, which
+            // this message did not used to print -- so the only record of the cause was
+            // thrown away by the very assertion that needed it.
             val viewModel = built.filterIsInstance<ChatViewModel>().firstOrNull()
+            val error = viewModel?.state?.value?.error
             val reached =
                 if (viewModel == null) {
                     "viewModel: <none built>"
                 } else {
                     "viewModel: saveNowCalls=${viewModel.saveNowCalls} " +
-                        "throughLock=${viewModel.saveNowThroughLock}"
+                        "throughLock=${viewModel.saveNowThroughLock} " +
+                        "error=" +
+                        (error?.let { "string#${it.textRes} detail='${it.detail}'" } ?: "<none>")
                 }
             throw AssertionError(
                 "Gave up waiting for the saved history after $polls polls. " +
@@ -445,8 +454,13 @@ class ChatViewModelTest {
                             "<- save was NEVER CALLED for anything; the missing write is upstream of the store"
                         audit.written == 0 ->
                             "<- every save was refused; the store's guards are the cause"
+                        audit.attempted > audit.written ->
+                            "<- a save took the store's lock and had not finished at the " +
+                                "timeout: the write itself is the suspect, and any exception " +
+                                "it threw is in the error line above"
                         else ->
-                            "<- writes happened; the store is not the cause"
+                            "<- every save the store was asked for was written whole; the " +
+                                "missing content is what the caller passed, not the write"
                     }) +
                     ". On disk: " +
                     (if (found.isEmpty()) {

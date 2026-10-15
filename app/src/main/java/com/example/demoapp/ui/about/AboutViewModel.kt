@@ -270,9 +270,11 @@ class AboutViewModel(
     /**
      * The figure has been read.
      *
-     * Removed with the two private flows that used to hold it: clearing a value no
-     * screen can see is not a state transition. Put it back with a caller when
-     * there is one.
+     * This had no caller for as long as the value had no screen: the note here used
+     * to say that clearing something nobody can see is not a state transition, and
+     * that it should come back with a caller when there was one. There is one now --
+     * the wipe card shows the figure and offers to dismiss it -- so the clearing is
+     * a transition the person on the other side can see.
      */
     fun dismissWipe() {
         _state.value = _state.value.copy(wipedBytes = null)

@@ -63,9 +63,12 @@ function Get-Baseline {
 # The rule is real -- sweeping against a failing baseline reports every mutation as
 # caught, because the failure is already there -- but a single red run is not the
 # same as a broken baseline, and treating them alike made this script unrunnable.
-# The suite has a known intermittent failure (`docs/OPEN-WIRING.md`): roughly one
-# test in five hundred, in one family of tests, position varying. One run therefore
-# has a real chance of being red for a reason that has nothing to do with the tree.
+# This was written for the intermittent failure these runs used to hit (roughly one
+# run in five under load, a rename the file system refused with nothing retrying
+# it). That cause was found and fixed on 2026-10-15 -- `FileChatStore` now retries
+# the move, and `docs/OPEN-WIRING.md` has the reasoning -- so what the three
+# attempts remain for is ordinary local load: a machine running this sweep is a
+# machine running thirteen Gradle builds in a row.
 #
 # Three attempts, and the result is reported either way. A tree that is genuinely
 # broken fails all three.
@@ -78,7 +81,7 @@ for ($attempt = 1; $attempt -le $baselineAttempts; $attempt++) {
 
     Write-Host "Baseline attempt $attempt`: $($baseline.Count) failing — $($baseline -join ', ')" -ForegroundColor Yellow
     if ($attempt -lt $baselineAttempts) {
-        Write-Host '  Retrying: this suite has a known intermittent failure, and one red run does not mean a broken tree.'
+        Write-Host '  Retrying: one red run does not mean a broken tree, and this suite carries its own load.'
     }
 }
 
@@ -139,7 +142,7 @@ $mutations = @(
        from = 'val next = this.imported.value.filterNot { it.id == imported.id } + imported'
        to   = 'val next = this.imported.value + imported' }
 
-    @{ file = 'ui/chat/ChatViewModel.kt'
+    @{ file = 'ui/chat/ChatConversation.kt'
        name = 'deleting a question leaves its answer behind'
        from = '.takeWhile { it.role != MessageRole.USER }'
        to   = '.takeWhile { false }' }
@@ -159,22 +162,22 @@ $mutations = @(
        from = 'return cleaned.ifBlank { "imported-model.litertlm" }'
        to   = 'return name' }
 
-    @{ file = 'ui/chat/ChatViewModel.kt'
+    @{ file = 'ui/chat/ChatGeneration.kt'
        name = 'a model nothing can be asked of still passes the guard'
        from = '_state.value.modelId != null && engine.state.value is EngineState.Ready'
        to   = '_state.value.modelId != null' }
 
-    @{ file = 'ui/chat/ChatViewModel.kt'
+    @{ file = 'ui/chat/ChatGeneration.kt'
        name = 'asking again seeds the question it is about to send'
        from = 'reseedRuntimeWith(trimmed, messages = upto.dropLast(1))'
        to   = 'reseedRuntimeWith(trimmed, messages = upto)' }
 
-    @{ file = 'ui/chat/ChatViewModel.kt'
+    @{ file = 'ui/chat/ChatModels.kt'
        name = 'a model load empties the runtime instead of seeding it'
-       from = '                reseedRuntimeWith(conversation)'
-       to   = '                engine.resetConversation()' }
+       from = '            reseedRuntimeWith(conversation)'
+       to   = '            engine.resetConversation()' }
 
-    @{ file = 'ui/chat/ChatViewModel.kt'
+    @{ file = 'ui/chat/ChatSaving.kt'
        name = 'a save stops deferring to the title on disk'
        from = 'if (stored.messages.isEmpty()) return withPin'
        to   = 'return withPin' }
@@ -189,12 +192,12 @@ $mutations = @(
     # checked here is the half that runs in a JVM: the setting is read when the
     # model is loaded, and it is the value the engine is given. A screen offering
     # five choices that never leave the file is worse than no screen.
-    @{ file = 'ui/chat/ChatViewModel.kt'
+    @{ file = 'ui/chat/ChatModels.kt'
        name = 'the creativity setting never reaches the engine'
        from = 'settings.samplingFor(descriptor.id),'
        to   = 'GenerationConfig(),' }
 
-    @{ file = 'ui/chat/ChatViewModel.kt'
+    @{ file = 'ui/chat/ChatGeneration.kt'
        name = 'the reply length never reaches the generation request'
        from = 'maxTokens = settings.maxReplyTokens,'
        to   = 'maxTokens = 512,' }
@@ -291,6 +294,60 @@ $mutations = @(
        name = 'the report stops redacting what it carries'
        from = 'return DiagnosticsRedactor.redact(raw)'
        to   = 'return raw' }
+
+    # The retry added for the pin/archive tap. A tap is not a reply: the store keeps
+    # the newer of two versions, which is right for a reply racing a save and wrong
+    # for a tap, because a refusal is not an exception and the row comes back
+    # unpinned with nothing on screen to say why. Three anchors, one per way the
+    # retry can be dropped: the early return that decides the first write was enough,
+    # the second write itself, and the read-back that turns a double refusal into
+    # something the user is told about.
+    @{ file = 'ui/history/HistoryViewModel.kt'
+       name = 'a first write that lost the race is treated as done'
+       from = 'if (stamp(chatStore.load(id) ?: return) == wanted) return'
+       to   = 'return' }
+
+    @{ file = 'ui/history/HistoryViewModel.kt'
+       name = 'a tap refused once is not tried again'
+       from = 'chatStore.save(change(fresh, wanted).copy(updatedAt = maxOf(clock(), fresh.updatedAt + 1)))'
+       to   = 'Unit' }
+
+    @{ file = 'ui/history/HistoryViewModel.kt'
+       name = 'a store that refuses twice loses the tap in silence'
+       from = 'if (stamp(chatStore.load(id) ?: return) != wanted) throw StoreRefusedTwice()'
+       to   = 'if (false) throw StoreRefusedTwice()' }
+
+    # The list's stamp read the device locale while the export it feeds wrote
+    # `Locale.US`, so a device set to Thai dated the same conversation 2568 in the
+    # list and 2025 in the file. Digits a file carries anywhere, or no digits.
+    @{ file = 'ui/history/HistoryViewModel.kt'
+       name = 'the export stamp follows the device locale again'
+       from = 'java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)'
+       to   = 'java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())' }
+
+    # Reading a picked file. The limit is checked as the bytes arrive; without it a
+    # file picked by mistake is copied into memory whole before anything looks at it.
+    @{ file = 'data/chat/BackupTransfer.kt'
+       name = 'an oversized import is read to the end before being refused'
+       from = 'if (total > limitBytes) return null'
+       to   = 'if (false) return null' }
+
+    # A Binder transaction carries about a megabyte and a String costs two bytes per
+    # character inside one: this bound is the difference between an export that is
+    # refused and a crash on the main thread.
+    @{ file = 'data/chat/BackupTransfer.kt'
+       name = 'the share limit is raised past what a transaction can carry'
+       from = 'const val MAX_SHARE_CHARS = 300_000'
+       to   = 'const val MAX_SHARE_CHARS = 3_000_000' }
+
+    # The retry around a refused move. A rename is refused for as long as something
+    # that is not this app holds the target -- a scanner, an indexer -- and one more
+    # attempt is the difference between a save that lands and the user being told the
+    # conversation could not be saved while nothing was wrong with it.
+    @{ file = 'data/chat/ChatStore.kt'
+       name = 'a refused move is reported without being tried again'
+       from = 'if (attempt >= MOVE_ATTEMPTS) throw refused'
+       to   = 'throw refused' }
 )
 
 $survived = @()

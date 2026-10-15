@@ -1,6 +1,8 @@
 package com.example.demoapp.ui.history
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 import androidx.compose.runtime.rememberCoroutineScope
 
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 
 import com.example.demoapp.formatBytes
+import com.example.demoapp.data.chat.BackupTransfer
 import com.example.demoapp.data.chat.ConversationExport
 import com.example.demoapp.data.chat.MarkdownLabels
 
@@ -125,17 +128,37 @@ fun HistoryScreen(
     val pickBackup =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri == null) return@rememberLauncherForActivityResult
-            val text =
-                runCatching {
-                        context.contentResolver.openInputStream(uri)?.use {
-                            it.readBytes().decodeToString()
+            // Off the main thread, and bounded. This callback arrives on the main
+            // thread and the document behind the uri is whatever size the user
+            // pointed at, so reading it here would drop frames on the way to the
+            // parser and hold the whole file in memory before anything looked at it.
+            // The stream is opened inside the IO block that reads it, so it is closed
+            // on the same dispatcher that owns it.
+            scope.launch {
+                val read =
+                    withContext(Dispatchers.IO) {
+                        runCatching {
+                            val input =
+                                context.contentResolver.openInputStream(uri)
+                                    // A token rather than a sentence: the sentence a
+                                    // person reads comes from `strings.xml`, and this
+                                    // only has to be recognisable in a log. `error`
+                                    // rather than a null so that a stream that cannot
+                                    // be opened is reported as unreadable, not as a
+                                    // file that was too large.
+                                    ?: error("open-picker-stream-null")
+                            input.use { BackupTransfer.readText(it) }
                         }
                     }
-                    .getOrNull()
-            if (text == null) {
-                viewModel.reportUnreadableBackup()
-            } else {
-                viewModel.restore(text)
+                val text = read.getOrNull()
+                when {
+                    // A failed read and a file too big to read are different facts
+                    // and get different sentences: one file is not ours, the other
+                    // might well be.
+                    read.isFailure -> viewModel.reportUnreadableBackup()
+                    text == null -> viewModel.reportBackupTooLarge()
+                    else -> viewModel.restore(text)
+                }
             }
         }
 
@@ -156,8 +179,8 @@ fun HistoryScreen(
                 val text = viewModel.buildMarkdown(markdownLabels)
                 if (text == null) {
                     viewModel.reportNothingToExport()
-                } else {
-                    shareText(context, markdownSubject, text)
+                } else if (!shareText(context, markdownSubject, text)) {
+                    viewModel.reportExportTooLarge(text.length)
                 }
             }
         },
@@ -169,15 +192,17 @@ fun HistoryScreen(
                 val text = viewModel.buildBackup()
                 if (text == null) {
                     viewModel.reportNothingToExport()
-                } else {
-                    shareText(context, backupSubject, text)
+                } else if (!shareText(context, backupSubject, text)) {
+                    viewModel.reportExportTooLarge(text.length)
                 }
             }
         },
         onImportRequested = { pickBackup.launch(arrayOf("application/json", "text/plain", "*/*")) },
         onExport = { id ->
             viewModel.prepareExport(id, exportLabels) { title, fileName, text ->
-                shareConversation(context, title, fileName, chooserTitle, text)
+                if (!shareConversation(context, title, fileName, chooserTitle, text)) {
+                    viewModel.reportExportTooLarge(text.length)
+                }
             }
         },
         modifier = modifier,
@@ -602,11 +627,15 @@ private fun HistoryCard(
 // ------------------------------------------------------------- previews ---
 
 private fun sample(id: String, title: String, messages: Int, minutesAgo: Long): Conversation {
-    val now = 1_760_000_000_000L - minutesAgo * 60_000L
+    // Anchored to the moment the preview renders rather than to a fixed epoch. A
+    // fixed one ages: this said `1_760_000_000_000L`, which by 2026 renders as
+    // "364 days ago" with every date heading empty -- a preview of nothing. The
+    // model is a catalogue entry, so a row also shows a model that exists.
+    val now = System.currentTimeMillis() - minutesAgo * 60_000L
     return Conversation(
         id = id,
         title = title,
-        modelId = "smollm2-360m",
+        modelId = "qwen3-0.6b-int4",
         createdAt = now,
         updatedAt = now,
         messages = (0 until messages).map {
@@ -687,7 +716,14 @@ private fun PreviewHistoryScanning() {
  * The text goes in the intent itself rather than in a file: the app has no
  * business leaving a copy of a private conversation in a shared directory, and a
  * temporary file that outlives a cancelled share is exactly the kind of thing the
- * privacy promise is about. It is short enough that the intent limit is not close.
+ * privacy promise is about.
+ *
+ * Returns false, having shared nothing, when the text is past
+ * [BackupTransfer.MAX_SHARE_CHARS]. An intent extra travels in a Binder
+ * transaction, and one that is too large is answered by a throw on the main
+ * thread rather than by an error. This KDoc used to say the text "is short enough
+ * that the intent limit is not close": true of one ordinary conversation, false of
+ * a whole library, and the difference was a crash on a button labelled export.
  */
 private fun shareConversation(
     context: android.content.Context,
@@ -695,7 +731,8 @@ private fun shareConversation(
     fileName: String,
     shareTitle: String,
     text: String,
-) {
+): Boolean {
+    if (!BackupTransfer.fitsInShare(text)) return false
     val intent =
         android.content.Intent(android.content.Intent.ACTION_SEND).apply {
             type = "text/plain"
@@ -708,6 +745,7 @@ private fun shareConversation(
             android.content.Intent.FLAG_ACTIVITY_NEW_TASK,
         ),
     )
+    return true
 }
 
 /**
@@ -715,9 +753,13 @@ private fun shareConversation(
  *
  * The same shape as [shareConversation] without a file name, and text rather than a
  * file for the same reason: an app that promises not to write user data outside its
- * own storage has exactly one way to hand something over, and this is it.
+ * own storage has exactly one way to hand something over, and this is it. The size
+ * is checked here rather than at each call site for the same reason the sharing is
+ * done in one place at all: a guard three callers have to remember is a guard two
+ * of them will.
  */
-private fun shareText(context: android.content.Context, subject: String, text: String) {
+private fun shareText(context: android.content.Context, subject: String, text: String): Boolean {
+    if (!BackupTransfer.fitsInShare(text)) return false
     val intent =
         android.content.Intent(android.content.Intent.ACTION_SEND).apply {
             type = "text/plain"
@@ -729,6 +771,7 @@ private fun shareText(context: android.content.Context, subject: String, text: S
             android.content.Intent.FLAG_ACTIVITY_NEW_TASK,
         ),
     )
+    return true
 }
 
 /** The heading for a bucket, as a resource. */

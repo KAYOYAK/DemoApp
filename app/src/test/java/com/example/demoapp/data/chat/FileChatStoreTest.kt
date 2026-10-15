@@ -14,6 +14,7 @@ import org.junit.Before
 import org.junit.Test
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 class FileChatStoreTest {
 
@@ -554,5 +555,68 @@ class FileChatStoreTest {
         assertEquals(2, after.written)
         assertEquals(1, after.refusedAsDeleted)
         assertNotNull("continuing a deleted conversation brings it back", store.load("gone"))
+    }
+
+    /**
+     * A move that is refused once is tried again rather than reported as a failure.
+     *
+     * A rename is refused for as long as something that is not this app holds the
+     * target -- on Windows a virus scanner that has just seen the file closed, or
+     * the search indexer. The refusal is transient and the write is idempotent, so
+     * the second attempt lands. Without the retry the user is told the conversation
+     * could not be saved while nothing was ever wrong with the data, which is what
+     * this project's own unit suite kept doing under load.
+     */
+    @Test
+    fun `a move refused once is tried again rather than reported as a failed save`(): Unit = runBlocking {
+        var attempts = 0
+        val flaky = FileChatStore(
+            root,
+            moveFile = { from, to ->
+                attempts++
+                if (attempts == 1) {
+                    throw java.nio.file.FileSystemException(from.path, to.path, "held by something else")
+                }
+                Files.move(from.toPath(), to.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            },
+        )
+
+        flaky.save(conversation("c1", "keep me"))
+
+        assertEquals("the second attempt is what put it there", 2, attempts)
+        assertEquals("keep me", flaky.load("c1")?.title)
+    }
+
+    /**
+     * A move that is refused every time is the caller's to hear about.
+     *
+     * The retry has a limit for a reason: a target that is read-only, gone, or on a
+     * full disk is not a transient refusal, and a save that did not happen is
+     * reported rather than swallowed -- with the temporary file cleaned up, or the
+     * next start would delete a `.tmp` nobody wrote.
+     */
+    @Test
+    fun `a move refused every time is reported and leaves nothing behind`(): Unit = runBlocking {
+        var attempts = 0
+        val refused = FileChatStore(
+            root,
+            moveFile = { from, to ->
+                attempts++
+                throw java.nio.file.FileSystemException(from.path, to.path, "read-only")
+            },
+        )
+
+        val failure = runCatching { refused.save(conversation("c1", "keep me")) }.exceptionOrNull()
+
+        assertNotNull("the caller is told", failure)
+        // Against the schedule itself, not a literal: the point is that the retry
+        // is bounded, and the bound is the store's to set.
+        assertEquals("and it stopped trying", FileChatStore.MOVE_ATTEMPTS, attempts)
+        assertNull("nothing was written", refused.load("c1"))
+        assertEquals(
+            "and no temporary file is left behind",
+            emptyList<String>(),
+            root.listFiles { f -> f.name.endsWith(".tmp") }?.map { it.name } ?: emptyList<String>(),
+        )
     }
 }

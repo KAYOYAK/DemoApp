@@ -48,6 +48,12 @@
 # manifest, classes.jar, res, R.txt, the two .so files, LICENSE and
 # THIRD_PARTY_NOTICE.txt, and no `proguard.txt`.
 #
+# The annotation itself is not the fragile part. `javap -v` on that classes.jar
+# reports `@Retention(RUNTIME)` and `@Target(FUNCTION)`: it is written into the class
+# file and the compiler never drops it, which is why the unminified build shows it.
+# Anything that loses it after that is R8 shrinking the annotated methods or the
+# annotation use, and that is what the measurements below look at.
+#
 # This rule is kept because it demonstrably works: with it the class and its method
 # names survive, without it they are renamed. Verified by comparing the dex.
 -keep class com.example.demoapp.inference.LocalTools { *; }

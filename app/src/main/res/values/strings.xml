@@ -258,12 +258,14 @@
     <!-- 备份与恢复 -->
     <string name="backup_export_all">导出全部对话</string>
     <string name="backup_export_subject">全部对话</string>
+    <string name="backup_export_too_large">这次导出有 %1$s，超过分享一次能带的量。按对话逐条导出，或者先删掉一些对话。</string>
     <string name="backup_import">导入对话</string>
     <string name="backup_nothing_to_export">还没有对话可以导出。</string>
     <string name="backup_import_result">导入了 %1$d 段对话，%2$d 段已经在这台设备上。</string>
     <string name="backup_import_none">这份备份里没有可用的对话。</string>
     <string name="backup_import_too_new">这份备份来自更新的版本（第 %1$d 版），这个版本读不了。</string>
     <string name="backup_import_unreadable">这个文件不是这个应用导出的备份。</string>
+    <string name="backup_import_too_large">这个文件比本应用的备份大得多，没有整个读进来。</string>
     <string name="backup_import_partial">有 %1$d 段没能导入。</string>
     <string name="backup_import_empty_dropped">另有 %1$d 段是空的，没有导入。</string>
     <string name="backup_import_only_empty">这份备份里只有空对话，没有可导入的内容。</string>
@@ -400,8 +402,14 @@
     <string name="about_diagnostics_subject">NULL 诊断信息</string>
     <string name="about_diagnostics_heading">诊断信息</string>
     <string name="about_diagnostics_app">应用</string>
+    <!--
+      报告里跟着版本号的那个括号。原来是 Kotlin 里的 "debug"/"release" 两个字面量：
+      文案闸门对这种单个小写英文词是盲的（它找的是句子），所以它一直没被拦下来。
+    -->
+    <string name="about_diagnostics_build_debug">调试构建</string>
+    <string name="about_diagnostics_build_release">发布构建</string>
     <string name="about_diagnostics_android">系统</string>
-    <string name="about_diagnostics_soc">处理器</string>
+    <string name="about_diagnostics_soc">芯片</string>
     <string name="about_diagnostics_device">设备</string>
     <string name="about_diagnostics_memory">可用内存</string>
     <string name="about_diagnostics_heap">堆</string>

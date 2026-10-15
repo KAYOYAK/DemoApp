@@ -38,7 +38,8 @@ that replacement would ripple through the whole application.
 
 - **Sampling parameters are fixed per conversation**, not per request. Changing
   temperature means recreating the conversation, which discards its history.
-  `ChatViewModel.reseedRuntimeWith` does that: it rebuilds the conversation with
+  `ChatViewModel.reseedRuntimeWith` does that (in `ui/chat/ChatGeneration.kt`, one of
+  the files the class is split across): it rebuilds the conversation with
   the current settings and replays the messages as history, so a temperature
   change applies without losing the conversation. Every path that changes what
   the runtime holds — loading a model, opening a conversation, asking again,
@@ -143,6 +144,17 @@ Decisions worth knowing:
 - **Nothing writes to shared storage.** The export goes into a share the user
   started, which is the only way an app that keeps everything private can hand
   anything over. See `PRIVACY.md`.
+- **Both directions are bounded, and the bound is the platform's.** A Binder
+  transaction carries about a megabyte and a `String` costs two bytes per character
+  inside one, so `BackupTransfer.MAX_SHARE_CHARS = 300_000` is what keeps a library
+  export from raising `TransactionTooLargeException` on the main thread. The other
+  direction is bounded because the file is not this app's: `MAX_IMPORT_BYTES`
+  refuses a file past 32 MB *while reading it*, so a mis-picked video is not pulled
+  into memory to find out what it was. Each bound produces a verdict the screen can
+  say, because "too large" is not "unreadable" and neither is "not a backup".
+- **Reading a backup happens off the main thread.** The picker's callback is a
+  main-thread callback, and reading a stream there is an ANR waiting for a large
+  file; the read and the decode both run in `Dispatchers.IO`.
 - **The result is reported, not inferred.** "12 restored" and "12 were already
   here" are both successes and mean opposite things to someone who just picked a
   file, so `RestoreReport` carries added, skipped, and failed separately.

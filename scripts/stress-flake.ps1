@@ -3,10 +3,13 @@
   Runs one test class repeatedly until it fails, and keeps the evidence.
 
 .DESCRIPTION
-  The intermittent failure recorded in docs/OPEN-WIRING.md is a disagreement
-  between what the screen shows and what the disk holds. It moves between test
-  classes and does not reproduce on a single forced run, so the only way to
-  study it is to run one class many times and keep what happened.
+  Written for the intermittent failure recorded in docs/OPEN-WIRING.md -- roughly
+  one run in five under load, a save that never reached the disk, in a family of
+  tests whose location moved between runs. It was found on 2026-10-15 (a rename
+  the file system refused, with nothing retrying it, fixed in `FileChatStore`)
+  and this script stays for two reasons: a fix is only as good as a batch of runs
+  that no longer fail, and a failure that moves between tests is not ruled out by
+  one green run.
 
   Two things this does that a shell loop does not:
 
@@ -19,6 +22,11 @@
       `initializationError` in tests that pass alone. Earlier rounds of this
       investigation produced usable numbers only from the runs where the build
       succeeded; this refuses to start rather than add to that pile.
+    * It refuses to count a run that executed nothing. Gradle marks the task
+      UP-TO-DATE when its inputs are unchanged, so a loop without `--rerun`
+      reports the same green result forty times over without running a test --
+      which is what the first version did. A run with no test XML is recorded as
+      `no-tests` and fails the batch, because it is not evidence either way.
 
 .PARAMETER Runs
   How many times to run the class. Default 30.
@@ -86,7 +94,7 @@ try {
             param($dir, $filter, $cls)
             Set-Location $dir
             $env:JAVA_HOME = 'D:\Program Files\Eclipse Adoptium\jdk-25.0.4.101-hotspot'
-            $out = & .\gradlew.bat -q :app:testDebugUnitTest --console=plain $filter $cls 2>&1
+            $out = & .\gradlew.bat -q :app:testDebugUnitTest --console=plain --rerun $filter $cls 2>&1
             [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = ($out | Out-String) }
         } -ArgumentList $ProjectDir, $filter, $filterArg
 
@@ -101,28 +109,65 @@ try {
         $r = Receive-Job $job
         Remove-Job $job -Force
         $secs = [int]$sw.Elapsed.TotalSeconds
+        # A job that lost `$LASTEXITCODE` must not be read as "not zero, so a test
+        # failed": the number is printed with every outcome so it can be read.
+        $exit = if ($null -eq $r.ExitCode) { -1 } else { [int]$r.ExitCode }
 
-        if ($r.ExitCode -eq 0) {
-            Write-Host ("  run {0,3} pass {1,4}s" -f $i, $secs)
+        # What the run actually executed, before believing its exit code.
+        #
+        # `--rerun` is what makes this a real run. Without it Gradle marks the task
+        # UP-TO-DATE after the first pass, the results directory stays empty, and a
+        # batch of forty "passes" is a batch of forty non-events -- which is exactly
+        # what the first version of this script reported: run one took 10s, runs two
+        # to forty took 5s each and executed nothing.
+        $ran = 0
+        Get-ChildItem $resultsDir -Filter '*.xml' -ErrorAction SilentlyContinue | ForEach-Object {
+            $xml = [xml](Get-Content $_.FullName -Raw)
+            foreach ($suite in $xml.SelectNodes('//testsuite')) {
+                $ran += [int]$suite.GetAttribute('tests')
+            }
+        }
+
+        if ($ran -eq 0) {
+            $failures += [pscustomobject]@{
+                Run    = $i
+                Kind   = 'no-tests'
+                Test   = '(nothing ran)'
+                Detail = "exit $($r.ExitCode), no test XML: this run says nothing about the code"
+            }
+            Write-Host ("  run {0,3} NO-TESTS {1,4}s  exit {2}" -f $i, $secs, $exit)
+            $r.Output | Out-File -Encoding utf8 (Join-Path $outRoot ("run-{0:d3}.log" -f $i))
+            continue
+        }
+
+        if ($exit -eq 0) {
+            Write-Host ("  run {0,3} pass {1,4}s  ({2} tests, exit 0)" -f $i, $secs, $ran)
             continue
         }
 
         # Read the XML, not the console: the message the test wrote lives there.
+        #
+        # `SelectSingleNode`, not `$case.failure`: under `Set-StrictMode -Version
+        # Latest` (line 59) a missing child element is a terminating error, so the
+        # property form threw the first time this path was reached and took the
+        # whole batch with it -- the one moment the script exists for.
         $sawFailure = $false
         Get-ChildItem $resultsDir -Filter '*.xml' -ErrorAction SilentlyContinue | ForEach-Object {
             $xml = [xml](Get-Content $_.FullName -Raw)
-            foreach ($case in $xml.testsuite.testcase) {
-                if ($case.failure -or $case.error) {
+            foreach ($case in $xml.SelectNodes('//testcase')) {
+                $failed = $case.SelectSingleNode('failure')
+                $errored = $case.SelectSingleNode('error')
+                if ($failed -or $errored) {
                     $sawFailure = $true
-                    $node = if ($case.failure) { $case.failure } else { $case.error }
-                    $detail = ($node.'#text' -split "`n" | Where-Object { $_ -match 'AssertionError|expected:|java\.' } | Select-Object -First 4) -join ' | '
+                    $node = if ($failed) { $failed } else { $errored }
+                    $detail = ($node.InnerText -split "`n" | Where-Object { $_ -match 'AssertionError|expected:|java\.' } | Select-Object -First 4) -join ' | '
                     $failures += [pscustomobject]@{
                         Run    = $i
-                        Kind   = if ($case.error) { 'error' } else { 'failure' }
-                        Test   = $case.name
+                        Kind   = if ($errored) { 'error' } else { 'failure' }
+                        Test   = $case.GetAttribute('name')
                         Detail = $detail
                     }
-                    Write-Host ("  run {0,3} {1} {2,4}s  {3}" -f $i, $case.name, $secs, $detail)
+                    Write-Host ("  run {0,3} {1} {2,4}s  {3}" -f $i, $case.GetAttribute('name'), $secs, $detail)
                 }
             }
         }
@@ -139,7 +184,8 @@ try {
     }
 
     Write-Host ''
-    Write-Host ("{0} runs, {1} did not pass" -f $Runs, $failures.Count)
+    $passed = $Runs - $failures.Count
+    Write-Host ("{0} runs: {1} executed and passed, {2} did not pass" -f $Runs, $passed, $failures.Count)
     if ($failures.Count) {
         $summary = Join-Path $outRoot 'summary.txt'
         $failures | Format-Table -AutoSize | Out-String -Width 400 | Tee-Object -FilePath $summary

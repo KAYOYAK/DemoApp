@@ -17,14 +17,14 @@ the next section), the process was killed between the inject and the remove, and
 manifest was left with the permission in it. The obvious recovery is
 `git checkout -- app/src/main/AndroidManifest.xml`, and it was run.
 
-**It restored the file from the index, not from HEAD — and in this repository those
-are different files.** The index holds the pre-edit version of everything, because the
-project has no commits and the working tree carries edits that were never staged. The
-command therefore removed the injected permission, as intended, and also removed
-`android:dataExtractionRules="@xml/data_extraction_rules"`, which had been added to
-that file earlier and never staged. Nothing on screen said so. The gate caught it on
-the next run — `dataExtractionRules is not set` — which is the only reason it was
-recovered rather than shipped.
+**It restored the file from the index, not from the working tree — and the two differed.**
+The index held the pre-edit version of everything, because at the time every edit in this
+repository lived in the working tree and nothing had been committed: the first commit,
+`defc96e`, was not made until 00:00 on 2026-10-15. The command therefore removed the injected permission, as
+intended, and also removed `android:dataExtractionRules="@xml/data_extraction_rules"`, which
+had been added to that file earlier and never staged. Nothing on screen said so. The gate
+caught it on the next run — `dataExtractionRules is not set` — which is the only reason it
+was recovered rather than shipped.
 
 An audit showed one file affected: the manifest's status went from `AM` to `A`, and
 every other modified file still showed `AM`. The attribute was re-applied by hand and
@@ -32,11 +32,14 @@ the gate returned to 0.
 
 **Two facts worth keeping:**
 
-1. `git checkout -- <file>` is a *destructive* command in this repository in a way it
-   is not in a normal one. In a normal repository it restores committed state and an
-   unstaged edit is recoverable from the reflog or from `git stash`; here there is no
-   committed state to recover to, `git stash` has no HEAD to stash against, and
-   `git worktree` is unavailable. Whatever the index does not have is gone.
+1. `git checkout -- <file>` restores from the index, never from the working tree, so on a
+   file with staged *and* unstaged edits it keeps the staged version and discards everything
+   since. What that costs depends on what the repository has to recover from: normally an
+   unstaged edit is in the reflog or in `git stash`. On the day of this incident there was no
+   history at all — `git stash` had no `HEAD` to stash against and `git worktree` was
+   unavailable — so whatever the index did not have was gone. The first commit (`defc96e`)
+   came later; the rule below is the one to follow either way, because it does not depend on
+   what history happens to hold.
 2. The correct recovery from a partially-applied injected edit is to **edit the file**,
    not to ask git for it. The injected change is a known one-line addition; deleting
    that line by hand cannot remove anything else.
@@ -892,7 +895,7 @@ suite being read carefully enough.
 
 ---
 
-## Open: the suite fails intermittently, and the failure moves
+## Closed: the suite failed intermittently, and the failure moved
 
 Measured on 2026-10-13, Windows, JDK 25, `--rerun-tasks` throughout:
 
@@ -930,7 +933,7 @@ so they are not repeated:
    `Dispatchers.Main is used concurrently` error, which was real, and does not
    touch this one.
 
-## Open: the intermittent failure is one test class, and two more tries did not fix it
+## Closed: the intermittent failure was one test class, and two more tries did not fix it
 
 Investigated further on 2026-10-14. Three things were established, one of which
 narrows it a lot and two of which close off explanations.
@@ -987,7 +990,8 @@ this up:
   on purpose (`$baselineAttempts = 3`, with the reason written at the call); `ci.yml`
   does not, and it runs `assembleDebug testDebugUnitTest lintDebug` on every push and
   pull request, so this flake is the one thing in this repository that can turn the
-  pipeline red for a reason nobody can act on. That is the cost of leaving it open.
+  pipeline red for a reason nobody can act on. That is the cost of leaving it open — and
+  it was found and fixed on 2026-10-15, in the last section of this file.
 
 Also measured, and worth not repeating: **100 consecutive green runs of
 `ChatViewModelTest` alone** (40 then 60, `scripts/stress-flake.ps1`), so whatever this
@@ -1076,11 +1080,19 @@ holds, and the tests are the only thing that ever notices it.
 
 ## Closed: nothing had ever been built from what a checkout carries
 
-**This repository has no commits.** `git log` answers `your current branch 'main' does
-not have any commits yet`, and that has been true for the whole life of the project:
-work accumulates as staged and unstaged edits, and `HEAD` does not exist as an object.
-Everything else in this file has been verified against **the working tree**, which is a
-different tree from the one any second copy would receive.
+**When this section was written, this repository had no commits.** The first one, `defc96e`,
+was made at 00:00 on 2026-10-15. `git log` answered `your
+current branch 'main' does not have any commits yet`, and that had been true for the whole
+life of the project: work accumulated as staged and unstaged edits, and `HEAD` did not exist
+as an object. Everything else in this file had been verified against **the working tree**,
+which is a different tree from the one any second copy would receive — and that is the gap
+this section closes.
+
+The repository has one commit now, `defc96e`: the first, 167 files, made after this section
+was written. The question has not changed, and a commit does not answer it by itself — what a
+second copy receives is still the question, so the check below is still the check: materialise
+what a checkout would carry and run the pipeline against that rather than against the working
+tree.
 
 The gap that opens is narrow and easy to miss. `git status --short` calls a file `AD`
 when its addition is staged and the file is then deleted on disk — and that is also
@@ -1384,5 +1396,105 @@ restored byte-identically.
    previous run's XML whenever this one never reached the tests, and reading it as it stands
    answers a question about the past — which is how the throttle mutation could have been
    called caught by a test suite that had not run.
+
+## Closed: the intermittent failure was a rename the file system refused
+
+Found on 2026-10-15, in the first full-suite run after the instrument the two sections above
+left behind was extended to print it — found by the instrument, not by a guess.
+
+The failing run printed this beside a fifteen-second timeout:
+
+```
+error=string#2131624131 detail='java.nio.file.FileSystemException:
+  ...\chats\<id>.<uuid>.tmp -> ...\chats\<id>.json: ...'
+```
+
+`string#2131624131` is `err_conversation_save` — 没能保存这段对话。 The ViewModel had been
+setting that message, with the exception's own text in `detail`, on every one of these
+failures. Nothing printed it. What the diagnostic *did* print, `attempted=3 written=2`, is
+the same fact seen from the other side: the store ran and decided, and the write threw.
+The earlier reading of that pair as "a save that took the lock and never finished" was the
+one thing the counters could not distinguish.
+
+The mechanism, with everything else already ruled out by the rounds above: `writeNow` writes
+the ciphertext to a unique temporary name, flushes, `fd.sync()`s, and renames it over the
+conversation file. That rename can be refused by another process holding the target — on
+Windows a virus scanner that has just seen the file closed, or the search indexer — and the
+refusal is transient, because the same rename succeeds moments later. The store had no
+retry: it caught the exception only to delete the temporary file and rethrow, so the save was
+lost and the user was told a conversation could not be saved, for a reason they could do
+nothing about. The test's fifteen seconds had nothing to do with it; the write had already
+failed.
+
+The fix, in `data/chat/ChatStore.kt`: the rename is retried on a widening schedule —
+`MOVE_RETRY_MILLIS = [10, 25, 50, 100, 200]`, so `MOVE_ATTEMPTS` is six — and a refusal that
+survives all of them is thrown to the caller, which reports it as it always did. (It started
+at three attempts 20 ms apart, which the stress batch below then caught failing.) The retry
+goes through a constructor parameter (`moveFile: (File, File) -> Unit = ::replaceFile`), and
+that is what makes it testable: `FileChatStoreTest` passes a move that refuses the first
+attempt and asserts the save still lands, and a move that refuses every attempt and asserts
+the caller hears about it with the temporary file cleaned up. A mutation anchor breaks the
+retry (`if (attempt >= MOVE_ATTEMPTS) throw refused` → `throw refused`), so the behaviour is
+held up by a test rather than by this paragraph.
+
+Three consequences worth recording:
+
+- **The "real disagreement between what the screen shows and what the disk holds"** was this,
+  and it was never a disagreement about the data: the disk was right, the save had failed,
+  and the screen had been told to keep a reply the disk never received.
+- **The exposure in CI is gone.** `ci.yml` runs the suite with no retry, and the only
+  intermittent failure it could hit was this rename, which no longer reaches an assertion.
+  No retry was added there: with the cause fixed, a retry would hide a regression rather
+  than a platform.
+- **The test harness was never the problem.** Three attempts at fixing it — dispatchers, a
+  dedicated executor, the teardown drain — were made and reverted while the cause was
+  unknown. The sections above are the record of why each was wrong, and they are why the fix
+  was made in the store rather than in the tests.
+
+The batch that was supposed to hold this up proved nothing until its tool was fixed. The
+first attempt, forty runs of `*ui.chat.*Test`, reported forty passes — five seconds each,
+against ten for the first — because `scripts/stress-flake.ps1` did not pass `--rerun`: Gradle
+marks `testDebugUnitTest` UP-TO-DATE once its inputs are unchanged, writes no result XML for
+the second run onwards, and the script's pass branch trusted the exit code without asking
+what ran. A green batch that never executes a test is the same shape of failure as the
+diagnostic that never printed its error, one level up: the instrument was wrong, and the
+result looked like the answer.
+
+Three changes to `scripts/stress-flake.ps1`, all of them aimed at that shape:
+
+- every run passes `--rerun`, so the task really re-executes;
+- a run that produced no test XML is recorded as `no-tests` and fails the batch, printed as
+  `0 executed and passed, 1 did not pass` rather than as a pass (verified with a filter that
+  matches no class, which is now a red batch and used to be a green one);
+- the XML reader uses `SelectSingleNode` rather than `$case.failure`, because line 59 sets
+  `Set-StrictMode -Version Latest` and a missing child element is a terminating error there —
+  the first time a real failure reached that path it killed the batch, which is the one
+  moment the script exists for.
+
+With the tool fixed, the batch ran for real — 40 runs of `*ui.chat.*Test`, 130 tests each, all
+of them executing — and **it found the failure again**, in 3 of the 40 runs. That is the
+result the batch existed to produce, and it says the section above was one cause and not the
+whole story:
+
+- **2 runs re-threw the same refused rename.** The saved error is the same
+  `err_conversation_save` with a `.tmp -> .json` path, and `attempted=3 written=2` — three
+  attempts, all refused, 20 ms apart. A scanner holding the target for longer than 60 ms
+  defeats that schedule, and the fix as first written only narrowed the window rather than
+  closing it. Now the waits are `[10, 25, 50, 100, 200]` ms, six attempts, which no plausible
+  scanner pass outlasts; what a save costs in the ordinary case is 10 ms, once, and only when
+  the file system refuses.
+- **2 runs hit `IllegalStateException: Dispatchers.Main is used concurrently with setting
+  it`**, in two tests each. This is the teardown hole the class's `awaitQuiescence` was
+  written for, and it is still open: the class waits for the ViewModels it tracks to go quiet
+  before `Dispatchers.resetMain()`, and something still dispatches to Main after that. It is a
+  property of the test harness, not of the app — the same code path passes 74 tests in every
+  other run — and the reported test is not the cause: the throw names the *other* `setMain`
+  call site, so it is attributed to whichever test happened to be starting when a previous
+  class's work came back to Main.
+
+The second one is not fixed here. What it has now is a rate (2 in 40), a name, and the
+harness it belongs to; `ci.yml` retries the suite **once**, with the reason written beside
+the retry, so a run that hits the harness race is retried rather than reported as a broken
+tree — and the local stress batch stays the honest counter, because it never retries.
 
 

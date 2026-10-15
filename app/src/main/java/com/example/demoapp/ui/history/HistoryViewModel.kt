@@ -5,9 +5,11 @@ package com.example.demoapp.ui.history
 import com.example.demoapp.ui.UiMessage
 
 import com.example.demoapp.R
+import com.example.demoapp.formatBytes
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.demoapp.data.chat.BackupTransfer
 import com.example.demoapp.data.chat.ChatStore
 import com.example.demoapp.data.chat.Conversation
 import com.example.demoapp.data.chat.ConversationBackupCodec
@@ -221,15 +223,25 @@ class HistoryViewModel(
      *
      * Loaded from disk before flipping rather than edited from the row on screen.
      * The row is a snapshot, and a conversation that changed in between -- a reply
-     * that arrived from the chat screen -- would be written back without it.
+     * that arrived from the chat screen -- would be written back without it. See
+     * [flip] for why the write is then read back and retried.
      */
     fun toggleArchive(id: String) {
         viewModelScope.launch {
-            val stored = withContext(Dispatchers.IO) { chatStore.load(id) } ?: return@launch
-            val updated = stored.copy(archivedAt = if (stored.archivedAt == null) clock() else null)
-            val outcome = withContext(Dispatchers.IO) { runCatching { chatStore.save(updated) } }
-            if (outcome.isFailure) {
-                _state.value = _state.value.copy(error = UiMessage(R.string.err_history_archive))
+            val failure = withContext(Dispatchers.IO) {
+                runCatching {
+                    flip(
+                        id = id,
+                        stamp = { it.archivedAt },
+                        change = { conversation, wanted -> conversation.copy(archivedAt = wanted) },
+                    )
+                }.exceptionOrNull()
+            }
+            if (failure != null) {
+                _state.value = _state.value.copy(
+                    error = UiMessage(R.string.err_history_archive)
+                        .withDetail(failure.message ?: failure::class.simpleName),
+                )
             }
             reload()
         }
@@ -245,6 +257,33 @@ class HistoryViewModel(
     /** The picked file could not be read at all. */
     fun reportUnreadableBackup() {
         _state.value = _state.value.copy(error = UiMessage(R.string.backup_import_unreadable))
+    }
+
+    /**
+     * The picked file was larger than this app will read.
+     *
+     * A sentence of its own rather than [reportUnreadableBackup]'s: a file too big
+     * to read is a file the app decided not to hold, and telling someone their
+     * backup is "not a backup this app wrote" would be wrong about the one file
+     * that might well be one.
+     */
+    fun reportBackupTooLarge() {
+        _state.value = _state.value.copy(error = UiMessage(R.string.backup_import_too_large))
+    }
+
+    /**
+     * The export was larger than an intent can carry.
+     *
+     * The size is named because nothing on screen holds it: an export happens in one
+     * tap, and "too large" without a number would leave the user guessing how much
+     * they have to delete. The count is the intent's cost, not a file's size -- a
+     * share travels as characters, and each of them costs two bytes.
+     */
+    fun reportExportTooLarge(characters: Int) {
+        _state.value = _state.value.copy(
+            error = UiMessage(R.string.backup_export_too_large, formatBytes(characters * 2L))
+                .withDetail("$characters characters, over the ${BackupTransfer.MAX_SHARE_CHARS}-character share limit"),
+        )
     }
 
     /** The last restore report has been read. */
@@ -288,7 +327,10 @@ class HistoryViewModel(
      */
     fun restore(text: String) {
         viewModelScope.launch {
-            when (val result = ConversationBackupCodec.decode(text)) {
+            // Decoded off the main thread: this is a whole backup file -- every
+            // conversation in it -- and parsing it is the longest part of an import,
+            // long enough to drop frames or trip the ANR watchdog on a full library.
+            when (val result = withContext(Dispatchers.IO) { ConversationBackupCodec.decode(text) }) {
                 is ConversationBackupCodec.ReadResult.Unreadable -> {
                     _state.value = _state.value.copy(
                         error = UiMessage(R.string.backup_import_unreadable)
@@ -372,17 +414,16 @@ class HistoryViewModel(
      * snapshot taken when the list was built, and a reply written since then would
      * be thrown away by saving it back — the same way a stale in-memory copy loses
      * a rename. Only the new pin value is changed; everything else is whatever is
-     * actually stored.
+     * actually stored. See [flip] for why the write is then read back and retried.
      */
     fun togglePin(id: String) {
         viewModelScope.launch {
             val failure = withContext(Dispatchers.IO) {
                 runCatching {
-                    val conversation = chatStore.load(id) ?: return@runCatching
-                    chatStore.save(
-                        conversation.copy(
-                            pinnedAt = if (conversation.pinnedAt == null) clock() else null,
-                        ),
+                    flip(
+                        id = id,
+                        stamp = { it.pinnedAt },
+                        change = { conversation, wanted -> conversation.copy(pinnedAt = wanted) },
                     )
                 }.exceptionOrNull()
             }
@@ -394,6 +435,39 @@ class HistoryViewModel(
             }
             reload()
         }
+    }
+
+    /**
+     * Flips one of the two timestamps a conversation can carry, and makes the flip
+     * stick.
+     *
+     * `ChatStore.save` keeps whichever version is newer on disk and drops an older
+     * one without saying so. That is right for a reply racing a save, and wrong for
+     * a tap: the pin the user just asked for would be refused, the refusal is not an
+     * exception, and the row would come back from the reload unchanged with nothing
+     * on screen to say why. So the write is read back, and a dropped one is retried
+     * against whatever won.
+     *
+     * Only the retry touches `updatedAt`, and only then because it has to be newer
+     * than the version that beat it: a pin is not an edit, and the list must not
+     * read "today" for a conversation nobody wrote to today.
+     *
+     * Throws when even the retry did not land, so the caller reports a failed tap
+     * rather than one that quietly did nothing.
+     */
+    private suspend fun flip(
+        id: String,
+        stamp: (Conversation) -> Long?,
+        change: (Conversation, Long?) -> Conversation,
+    ) {
+        val first = chatStore.load(id) ?: return
+        val wanted = if (stamp(first) == null) clock() else null
+        chatStore.save(change(first, wanted))
+        if (stamp(chatStore.load(id) ?: return) == wanted) return
+
+        val fresh = chatStore.load(id) ?: return
+        chatStore.save(change(fresh, wanted).copy(updatedAt = maxOf(clock(), fresh.updatedAt + 1)))
+        if (stamp(chatStore.load(id) ?: return) != wanted) throw StoreRefusedTwice()
     }
 
     // -------------------------------------------------------------- renaming ---
@@ -455,6 +529,21 @@ class HistoryViewModel(
  * its own layer: `HistoryScreen` builds the labels during composition, where a
  * language change is observable, and this is the one label that is a computation
  * rather than a lookup.
+ *
+ * `Locale.US` rather than the default, which is what this used to read. A date in
+ * an export is a fact rather than a sentence: a default locale that counts a
+ * different calendar would write a Thai Buddhist year here and the ISO year in
+ * `ConversationExport`'s own stamp, so the same conversation exported two ways
+ * carried two dates.
  */
 fun clockText(epochMillis: Long): String =
-    java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(epochMillis))
+    java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(epochMillis))
+
+/**
+ * A tap whose write the store dropped twice.
+ *
+ * A type rather than a sentence, because every word a person reads comes from
+ * `strings.xml`: the caller reports the tap with its own string resource and puts
+ * this name in the error's detail, where a bug report can be grepped for it.
+ */
+private class StoreRefusedTwice : IllegalStateException()

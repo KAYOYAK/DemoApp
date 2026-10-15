@@ -78,6 +78,7 @@ fun AboutScreen(
             viewModel.wipeFreeSpace(context.filesDir, 2L * 1024 * 1024 * 1024)
         },
         wiping = state.wiping,
+        onDismissWipe = viewModel::dismissWipe,
         onShareDiagnostics = {
             // Assembled here because this is the layer with the Context. Nothing is
             // written to storage and nothing is sent: the text goes into a share the
@@ -114,6 +115,8 @@ internal fun AboutContent(
     /** Writes over the app's free space. Slow, and the cost is on the screen. */
     onWipeFreeSpace: () -> Unit,
     wiping: Boolean,
+    /** The figure the wipe reported has been read. */
+    onDismissWipe: () -> Unit,
     onEraseCancelled: () -> Unit,
     onDismissReport: () -> Unit,
     onDismissError: () -> Unit,
@@ -308,11 +311,22 @@ internal fun AboutContent(
                 )
             }
             state.wipedBytes?.let { written ->
-                Text(
-                    stringResource(R.string.about_wipe_done, formatBytes(written)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                // Dismissible, because the figure is the answer to the button above
+                // it and it should stay only as long as the person who pressed it
+                // wants it there. It used to stay until the next wipe or a restart:
+                // the value could not be cleared at all, and `dismissWipe` had no
+                // caller anywhere in the app.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(R.string.about_wipe_done, formatBytes(written)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = onDismissWipe) {
+                        Text(stringResource(R.string.settings_dismiss))
+                    }
+                }
             }
             Spacer(Modifier.height(4.dp))
             Text(
@@ -483,7 +497,11 @@ fun diagnosticsFacts(
         appVersion = runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         }.getOrNull().orEmpty(),
-        buildType = if ((context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) "debug" else "release",
+        buildType = if ((context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            stringResource(R.string.about_diagnostics_build_debug)
+        } else {
+            stringResource(R.string.about_diagnostics_build_release)
+        },
         androidRelease = android.os.Build.VERSION.RELEASE.orEmpty(),
         sdkInt = android.os.Build.VERSION.SDK_INT,
         manufacturer = android.os.Build.MANUFACTURER.orEmpty(),

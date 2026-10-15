@@ -44,3 +44,7 @@ compliance/.pomcache/
 
 # Kotlin compiler session files, written next to the build rather than inside it
 .kotlin/
+
+# Output saved by hand while working on the tree (one file per run, regenerable,
+# never commit -- the gates write their own output on a runner)
+build-logs/

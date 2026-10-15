@@ -208,6 +208,13 @@ class LiteRtLlmEngine(private val cacheDir: File) : LlmEngine {
                     probe = created.createConversation(configFor(emptyList()))
                     probe.sendMessageAsync(Message.user("hi"), maxOutputToken = 1).collect { }
 
+                    // Closed here, and cleared, rather than left in the field: it
+                    // was only ever a test of the delegate. An open conversation
+                    // holds the native context it was created with for as long as
+                    // the engine lives, and this one is never used again.
+                    runCatching { probe?.close() }
+                    probe = null
+
                     // The real conversation is created after the probe, so nothing
                     // the probe said is part of the user's context.
                     val createdConversation = created.createConversation(configFor(emptyList()))

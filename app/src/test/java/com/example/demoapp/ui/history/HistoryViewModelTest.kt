@@ -3,6 +3,8 @@ package com.example.demoapp.ui.history
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 
+import com.example.demoapp.R
+import com.example.demoapp.data.chat.ChatStore
 import com.example.demoapp.data.chat.ConversationExport
 
 import com.example.demoapp.data.chat.ChatMessage
@@ -390,4 +392,109 @@ class HistoryViewModelTest {
         withTimeout(AWAIT_TIMEOUT_MS) { viewModel.state.first { it.error != null } }
         assertFalse("Nothing is handed out", called)
     }
+
+    // -------------------------------------------------------------- pinning ---
+
+    @Test
+    fun `a pin lands even when a reply is written while the tap is in flight`() = runBlocking {
+        // The store keeps the newer of two versions and drops the older one without
+        // saying so. That is right for a reply racing a save, and wrong for a tap:
+        // the pin would be refused, the refusal is not an exception, and the reloaded
+        // row would come back unpinned with nothing on screen to say why.
+        //
+        // The race is forced rather than hoped for. `RacingStore` writes a newer
+        // version of the same conversation in place of the first save, which is what
+        // winning looks like from the store's side.
+        val original = conversation("c1", "A chat", updatedAt = 1_000)
+        chatStore.save(original)
+        val reply = original.copy(
+            updatedAt = original.updatedAt + 500,
+            messages = original.messages +
+                ChatMessage("c1-reply", MessageRole.ASSISTANT, "a reply", 1_600),
+        )
+        val racing = HistoryViewModel(RacingStore(chatStore, reply), clock = { 5_000 })
+
+        racing.togglePin("c1")
+        withTimeout(AWAIT_TIMEOUT_MS) {
+            racing.state.first { state -> state.rows.any { it.conversation.pinnedAt != null } }
+        }
+
+        val stored = chatStore.load("c1")
+        assertNotNull("The tap must be on disk, not only on screen", stored?.pinnedAt)
+        assertEquals(
+            "and the reply that beat the first write must still be there",
+            reply.messages.size,
+            stored?.messages?.size,
+        )
+    }
+
+    @Test
+    fun `a pin the store refuses twice is reported rather than lost in silence`() = runBlocking {
+        chatStore.save(conversation("c1", "A chat", updatedAt = 1_000))
+        val refusing = HistoryViewModel(RefusingStore(chatStore), clock = { 5_000 })
+
+        refusing.togglePin("c1")
+
+        val state = withTimeout(AWAIT_TIMEOUT_MS) { refusing.state.first { it.error != null } }
+        assertEquals(
+            "The user is told, rather than the row quietly coming back unpinned",
+            R.string.err_history_pin,
+            state.error?.textRes,
+        )
+        assertNull("and nothing was written", chatStore.load("c1")?.pinnedAt)
+    }
+
+    // --------------------------------------------------------- export stamps ---
+
+    @Test
+    fun `an export stamp does not change with the device's default locale`() {
+        // A date is a fact rather than a sentence: the Markdown export's own stamp
+        // (`ConversationExport`) always used `Locale.US`, and this one read the
+        // default, so a device set to Thai dated the same conversation 2568 in the
+        // list and 2025 in the file it wrote.
+        val at = 1_700_000_000_000L
+        val previous = java.util.Locale.getDefault()
+        val us = try {
+            java.util.Locale.setDefault(java.util.Locale.US)
+            clockText(at)
+        } finally {
+            java.util.Locale.setDefault(previous)
+        }
+        val thai = try {
+            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("th-TH"))
+            clockText(at)
+        } finally {
+            java.util.Locale.setDefault(previous)
+        }
+
+        assertEquals("The same instant, however the device is set", us, thai)
+        assertTrue("and in digits a file can carry anywhere, was $thai", thai.all { it.code < 128 })
+    }
+}
+
+/**
+ * A store where a reply can land between the load and the write.
+ *
+ * The first save puts [rival] on disk instead of the caller's conversation, which is
+ * what the store would have found there had the reply been written a moment earlier:
+ * newer than the version the caller read, so the caller's own write is refused.
+ */
+private class RacingStore(
+    private val real: ChatStore,
+    private val rival: Conversation,
+) : ChatStore by real {
+    private var raced = false
+
+    override suspend fun save(conversation: Conversation) {
+        if (!raced) {
+            raced = true
+            real.save(rival)
+        }
+        real.save(conversation)
+    }
+}
+
+/** A store that accepts every write and keeps none of them. */
+private class RefusingStore(private val real: ChatStore) : ChatStore by real {
+    override suspend fun save(conversation: Conversation) = Unit
 }

@@ -21,6 +21,11 @@ import com.example.demoapp.ui.chat.ChatScreen
 import com.example.demoapp.ui.about.AboutViewModel
 import com.example.demoapp.ui.about.AboutScreen
 import com.example.demoapp.ui.chat.ChatViewModel
+import com.example.demoapp.ui.chat.newChat
+import com.example.demoapp.ui.chat.openConversation
+import com.example.demoapp.ui.chat.refresh
+import com.example.demoapp.ui.chat.reportSpeechUnavailable
+import com.example.demoapp.ui.chat.setSpeaking
 import com.example.demoapp.ui.history.HistoryScreen
 import com.example.demoapp.ui.settings.SettingsViewModel
 import com.example.demoapp.ui.settings.SettingsScreen
