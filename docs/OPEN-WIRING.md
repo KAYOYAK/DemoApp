@@ -1579,5 +1579,45 @@ nothing). All four now name the content they are waiting for. This is the same l
 counter that never moved, one level down: **a wait whose predicate can be satisfied by the
 wrong thing is not a wait**, and it took a hundred and fifty runs and a stack trace to see it.
 
+## What the lock and the read-aloud path answer on a device
+
+Two seams cannot be reached from a JVM test: what `BiometricManager.canAuthenticate` says on the
+device the user holds, and whether the platform's text-to-speech engine has a Chinese voice.
+Neither is decidable from source — a constant `true` or `false` in either place passes every other
+test in this project while locking a user out permanently, or never locking at all — so both were
+given an instrumented test and both were run on `emulator-5554` through
+`scripts/run-instrumented-test.ps1`.
+
+`DeviceAuthTest` finished `OK (1 test)`. Its `println` goes to the instrumented process's stdout
+rather than to the instrumentation stream, so the value is read from logcat after `adb logcat -c`:
+
+```
+I/System.out( 6323): DEVICE-AUTH: canAuthenticate=false
+```
+
+with `adb shell locksettings get-disabled` → `true` and `dumpsys fingerprint` → `Fps state: 0`.
+This emulator has no lock-screen credential, so `canAuthenticate` is false and the fifteen-minute
+lock correctly never engages here; the test's point is not the value but that the value is the
+device's own answer, which is what `theLockFollowsTheDevicesOwnAnswer` asserts against
+`AppLock.isLocked(..., authenticatedAt = null, ...)`.
+
+`SpeechTest` finished `OK (2 tests)`. Logcat shows `Sucessfully bound to com.google.android.tts`
+(googletts 20241125.02) and then
+
+```
+I/System.out( 6142): SPEECH: available=true queued=true finished=true
+```
+
+so on this image `TextToSpeech` **does** report a Chinese voice — an earlier guess from
+`adb shell settings get secure tts_default_synth` returning `null` said the opposite — the utterance
+was queued, the completion callback fired, and `isSpeaking` was false at the end. The second test
+has no no-voice branch to exercise here and says so: `SPEECH: this device has a Chinese voice, so
+the no-voice path is not exercised here`.
+
+Neither test proves anything was audible, and neither claims to. The engine's path is asserted; the
+sound is judged by listening. That distinction is the test's own KDoc, because a voice with no data
+reports an error and the app clears its state exactly as designed — a green test over a silent
+phone is the failure mode a listener catches and a runner does not.
+
 
 
