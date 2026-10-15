@@ -81,10 +81,43 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/release.jks"
 
+      # What the download has to be checked against, and what the app displays.
+      #
+      # The body below told the reader to verify the download against "the SHA-256
+      # published below" while nothing published a SHA-256, and `AppSignature`'s
+      # `expected` set makes the same comparison from inside the app -- against a
+      # fingerprint that was only ever in a commit message. Both values are
+      # computed here, from the artefact that is about to be attached, so the page
+      # and the app can be compared by someone holding neither source nor keytool.
+      #
+      # The certificate digest is printed in the form the About screen prints it:
+      # colon-separated upper case. `apksigner` writes it as lower case with no
+      # separators, and the two look different enough that a reader comparing them
+      # by eye would think they disagree.
+      - name: Record the artefact's hash and its signer
+        run: |
+          set -euo pipefail
+          echo "APK_SHA256=$(sha256sum "$APK_PATH" | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          APKSIGNER=$(find "${ANDROID_HOME}/build-tools" -name apksigner | sort | tail -1)
+          RAW=$("$APKSIGNER" verify --print-certs "$APK_PATH" |
+                sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1 | tr -d ':')
+          if [ -n "$RAW" ]; then
+            echo "APK_SIGNER=$(printf '%s' "$RAW" | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')" >> "$GITHUB_ENV"
+          else
+            echo "APK_SIGNER=(not reported)" >> "$GITHUB_ENV"
+          fi
+
+      # The app contains a library that carries copyleft notices, and the decision to
+      # ship it (recorded in compliance/embedded-notices.json) is that the notice ships
+      # with the artefact. Attaching the file here is that decision's other half: an
+      # accepted finding whose notice stayed in the repository would be accepted in name
+      # only for anyone downloading the APK.
       - name: Publish release
         uses: softprops/action-gh-release@v3
         with:
-          files: ${{ env.APK_PATH }}
+          files: |
+            ${{ env.APK_PATH }}
+            compliance/notices/litertlm-android-0.18.0-THIRD_PARTY_NOTICE.txt
           generate_release_notes: true
           draft: true
           body: |
@@ -92,6 +125,21 @@ jobs:
 
             **Artefact type: ${{ env.APK_KIND }}**
 
-            Verify the download against the SHA-256 published below before
-            installing. Debug-signed builds are for testing only and cannot be
-            published to an app store.
+            - APK SHA-256: `${{ env.APK_SHA256 }}`
+            - Signing certificate SHA-256: `${{ env.APK_SIGNER }}`
+
+            The APK contains `com.google.ai.edge.litertlm:litertlm-android:0.18.0`, whose
+            own `THIRD_PARTY_NOTICE.txt` is attached beside the APK, unchanged. It lists
+            the licences of everything the publisher's build touched, including the GPL
+            toolchain entries the build environment contributes; what that means here, and
+            the evidence behind it, is written down in `compliance/embedded-notices.json`
+            in the source.
+
+            Verify the download against the SHA-256 above before installing. The
+            app's own About screen prints the certificate this copy is signed with,
+            and the check there compares it with the fingerprint recorded in the
+            source; on a signed release the line above is that same fingerprint, so
+            the two can be compared without either of you running `keytool`.
+
+            Debug-signed builds are for testing only and cannot be published to an
+            app store.
