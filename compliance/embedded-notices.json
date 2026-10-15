@@ -20,13 +20,21 @@
       "status": "unresolved",
       "question": "The notice file packed inside this AAR lists a component called 'Google Runtime Environment' under GNU GPL version 2. The artefact does not say whether that component is linked into jni/*/liblitertlm_jni.so, which this app redistributes, or whether it is part of the environment the library was built in and is listed for completeness. Google publishes LiteRT-LM itself under Apache-2.0, which makes the second reading more likely, but 'more likely' is not a legal position.",
       "why_it_is_recorded_rather_than_dismissed": "The whole point of the legal constraint is that a licence obligation attaches to every copy already distributed and cannot be repaired afterwards. Guessing that a GPL notice is probably not about shipped code is exactly the guess that cannot be taken back.",
+      "scope": "Blocks publishing a release build. Does not block development or testing.",
+      "recorded_on": "2026-10-12",
+      "investigated_on": "2026-10-15",
+      "what_the_notice_shows": [
+        "The heading is a component entry in an alphabetical list, not a title: the line above it is 'FlatBuffers:' (line 6702) and the line below 'Gson:' (line 7252), and what follows is the complete GPL-2.0 text with no runtime exception attached.",
+        "The same file aggregates the build environment, not the shipped binary. It names components that cannot be inside jni/*/liblitertlm_jni.so: 'rocm:', 'pocl:', 'Level Zero loader and headers', 'vulkan_*', 'SwiftShader:', 'dawn:', 'dxc:', 'spirv_*', the AndroidX Java libraries, 'xprof:', 'perfetto:', and the toolchains 'gcc_16_1_0:' and 'llvm_unstable:' (whose entry lists 'Files: installs/libstdcxx/*' and 'installs/gcc*').",
+        "Every entry in that file that is a runtime carries the exception that would make shipping it unremarkable -- the 'means either the Program or any derivative work under copyright law' wording appears under llvm_unstable and gcc_16_1_0, and not under this one.",
+        "None of this proves that no GPL component is linked. The entry names no files, and a stripped shared library cannot be inventoried from its strings, so the reading above is an argument about where the text came from rather than a statement about the object code."
+      ],
       "what_would_resolve_it": [
         "A statement from the library's publisher that the component is build-time only, or",
         "an inventory of the symbols and objects linked into liblitertlm_jni.so that shows no GPL component, or",
-        "a decision to treat LiteRT-LM itself as GPL-encumbered and license this project accordingly."
-      ],
-      "scope": "Blocks publishing a release build. Does not block development or testing.",
-      "recorded_on": "2026-10-12"
+        "a decision to treat LiteRT-LM itself as GPL-encumbered and license this project accordingly.",
+        "A reply on the publisher's tracker (github.com/google-ai-edge/LiteRT-LM) asking which of the notice's components are linked into the artifact it publishes."
+      ]
     },
     {
       "artifact": "com.google.ai.edge.litertlm:litertlm-android:0.18.0",
@@ -45,11 +53,19 @@
       "status": "unresolved",
       "question": "The notice contains an Eclipse Public License 1.0 section whose component heading could not be read unambiguously from the packed text; the surrounding lines name no product. EPL-1.0 is weak copyleft with a patent-retaliation clause, and the notice does not say what it covers.",
       "why_it_is_recorded_rather_than_dismissed": "Same reasoning as the GPL entry: the obligation attaches at distribution.",
-      "what_would_resolve_it": [
-        "Reading the notice around that heading as it appears in the publisher's own repository, where the formatting is intact."
-      ],
       "scope": "Blocks publishing a release build.",
-      "recorded_on": "2026-10-12"
+      "recorded_on": "2026-10-12",
+      "investigated_on": "2026-10-15",
+      "what_the_notice_shows": [
+        "The heading is the bare word 'Files:' (line 10099) with nothing after it, followed immediately by the EPL-1.0 text -- a list whose items were dropped when the notice was assembled, which is why it could not be read as a product name.",
+        "It sits inside the Kotlin entry, not the native library's: 'Kotlin:' begins at line 9804 and 'Kotlin coroutines:' at 10353, and the three 'Files:' headings between them belong to Kotlin's own aggregated notice.",
+        "That block arrives with Kotlin, a JVM artifact, and EPL-1.0 is what Kotlin records for the files it took from Eclipse. Nothing in the packed notice ties it to jni/*/liblitertlm_jni.so.",
+        "The same limit as the GPL entry applies: the notice says which licences its publisher's build touched, and it cannot say which object files ended up linked."
+      ],
+      "what_would_resolve_it": [
+        "Reading the notice around that heading as it appears in the publisher's own repository, where the formatting is intact.",
+        "Kotlin's own licenses directory, which is public and still has the file list the packed text lost."
+      ]
     }
   ]
 }

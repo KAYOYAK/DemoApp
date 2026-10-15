@@ -212,7 +212,7 @@ class LiteRtLlmEngine(private val cacheDir: File) : LlmEngine {
                     // was only ever a test of the delegate. An open conversation
                     // holds the native context it was created with for as long as
                     // the engine lives, and this one is never used again.
-                    runCatching { probe?.close() }
+                    runCatching { probe.close() }
                     probe = null
 
                     // The real conversation is created after the probe, so nothing

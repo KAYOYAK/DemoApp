@@ -380,7 +380,7 @@
     <string name="about_keeps_body">你的对话、你下载的模型，以及你在设置里做过的选择。全部在这个应用的私有目录里，其他应用读不到。也不会同步到云端备份。</string>
 
     <string name="about_built_from_title">它由什么构成</string>
-    <string name="about_built_from_body">开源。每一个库、每一个模型都在允许再分发的许可证之下，每次构建前都会自动检查。模型从发布方下载而不是打包进来，所以许可证仍然是他们的。</string>
+    <string name="about_built_from_body">开源。构建前会自动核对每个库的许可证，核对结果连同还没有结论的条目都记在仓库里。模型从发布方下载而不是打包进来，所以许可证仍然是他们的。</string>
 
     <string name="about_storage_title">这台设备上的占用</string>
     <string name="about_storage_conversations">对话</string>

@@ -65,7 +65,7 @@ function Get-DaemonLogDir {
     # The `.gradle` segment is added when GRADLE_USER_HOME is unset: that variable, when
     # it is set, is already the gradle home itself, and when it is not, the home is
     # `<user profile>/.gradle`. Omitting it pointed the message at
-    # `C:\Users\XSZ20\daemon\9.1.0`, which does not exist -- a diagnostic that sends
+    # `<user profile>\daemon\9.1.0`, which does not exist -- a diagnostic that sends
     # the reader somewhere there is nothing to read.
     $userHome = $env:GRADLE_USER_HOME
     if (-not $userHome) {
