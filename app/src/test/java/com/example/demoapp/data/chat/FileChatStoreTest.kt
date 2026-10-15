@@ -612,6 +612,21 @@ class FileChatStoreTest {
         // Against the schedule itself, not a literal: the point is that the retry
         // is bounded, and the bound is the store's to set.
         assertEquals("and it stopped trying", FileChatStore.MOVE_ATTEMPTS, attempts)
+        // The refusal's own account. This is the field that turns the next
+        // occurrence of a refused move from another widening of the schedule into
+        // a diagnosis: the operating system's reason, which the message the caller
+        // ends up with does not always carry.
+        val refusal = refused.saveAudit().lastMoveRefusal
+        assertNotNull("the refusal is recorded", refusal)
+        assertTrue(
+            "the operating system's own reason is in it, not just the fact: $refusal",
+            refusal!!.contains("reason=read-only"),
+        )
+        assertTrue(
+            "and how many attempts waited how long: $refusal",
+            refusal.contains("after ${FileChatStore.MOVE_ATTEMPTS} attempts") &&
+                refusal.contains("in ${FileChatStore.MOVE_RETRY_MILLIS.sum()}ms"),
+        )
         assertNull("nothing was written", refused.load("c1"))
         assertEquals(
             "and no temporary file is left behind",

@@ -6,6 +6,12 @@
 #
 # Run: pwsh -File scripts/mutation-sweep.ps1
 
+param(
+    # Sweep a tree that carries uncommitted edits anyway. See the guard below for
+    # what that costs.
+    [switch]$AllowDirty
+)
+
 $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $PSScriptRoot
 # The JDK is named here only as a fallback. Hardcoding one machine's install path meant
@@ -17,6 +23,30 @@ if (-not $env:JAVA_HOME -or -not (Test-Path $env:JAVA_HOME)) {
     }
 }
 Set-Location $root
+
+# The tree has to be clean, and this is not a formality.
+#
+# The baseline is measured, a mutation is planted on top of whatever is in the
+# working tree, and a build that fails is counted as "caught". So uncommitted edits
+# do not merely add noise: they can fail the build themselves, which the sweep reads
+# as proof that a test asserts the mutated behaviour. That happened -- a rename in
+# progress turned eight anchors into compile errors that had nothing to do with the
+# planted mutation, and the run still ended `CLEAN: 45 caught, 0 survived`, which is
+# the most confident possible way to say something untrue.
+#
+# Untracked files are ignored: build output lands in one, and a stray file cannot
+# change what the compiler does with the mutated source.
+if (-not $AllowDirty) {
+    $dirty = @(git status --porcelain --untracked-files=no)
+    if ($dirty.Count -gt 0) {
+        Write-Host "REFUSED - the working tree carries uncommitted changes:" -ForegroundColor Red
+        $dirty | ForEach-Object { Write-Host "  $_" }
+        Write-Host ''
+        Write-Host 'Commit or stash them first. A sweep over a dirty tree counts build errors as coverage.' -ForegroundColor Red
+        Write-Host 'Pass -AllowDirty to sweep anyway and read the doubtful list it prints.' -ForegroundColor Red
+        exit 2
+    }
+}
 
 function Get-Failures {
     $dir = 'app/build/test-results/testDebugUnitTest'
@@ -344,14 +374,35 @@ $mutations = @(
     # that is not this app holds the target -- a scanner, an indexer -- and one more
     # attempt is the difference between a save that lands and the user being told the
     # conversation could not be saved while nothing was wrong with it.
+    #
+    # The anchor is the guard, not the throw: the throw moved inside a block when the
+    # refusal's own account started being recorded, and `if (true)` is the same
+    # mutation as removing the guard -- the first refusal is reported instead of tried
+    # again.
     @{ file = 'data/chat/ChatStore.kt'
        name = 'a refused move is reported without being tried again'
-       from = 'if (attempt >= MOVE_ATTEMPTS) throw refused'
-       to   = 'throw refused' }
+       from = 'if (attempt >= MOVE_ATTEMPTS) {'
+       to   = 'if (true) {' }
+
+    # The account the refusal leaves behind. Three widenings of the retry schedule were
+    # decided without it -- `FileSystemException.reason` is what separates a sharing
+    # violation from a read-only target from a full disk, and the message the caller
+    # carries does not always include it. One mutation per part the test asserts, so a
+    # part that stops being filled in is attributable to that part.
+    @{ file = 'data/chat/ChatStore.kt'
+       name = 'the refusal account stops saying what the system said'
+       from = 'val reason = (refused as? java.nio.file.FileSystemException)?.reason'
+       to   = 'val reason: String? = null' }
+
+    @{ file = 'data/chat/ChatStore.kt'
+       name = 'the refusal account reports a window that was not waited'
+       from = 'val waited = FileChatStore.MOVE_RETRY_MILLIS.take(attempts - 1).sum()'
+       to   = 'val waited = 0L' }
 )
 
 $survived = @()
 $discarded = @()
+$doubtful = @()
 $caught = 0
 
 # Every anchor has to resolve before the sweep starts.
@@ -428,9 +479,20 @@ foreach ($m in $mutations) {
     # mutation that was caught.
     if ($failures.Count -eq 0 -and $exit -ne 0) {
         $compileErrors = @($log | Where-Object { $_ -match '^e: ' })
-        if ($compileErrors.Count -gt 0) {
-            Write-Host ("  caught        {0}  (does not compile: {1})" -f $m.name, $compileErrors[0].Trim()) -ForegroundColor Green
+        # A build error has to be in the file the mutation edited to say anything
+        # about that mutation. The sweep is often run over a tree that is not
+        # pristine -- and without the guard above, always was -- so an error
+        # somewhere else is a report about the tree, not about the anchor, and
+        # counting it as a catch would manufacture the coverage the sweep exists to
+        # measure.
+        $leaf = Split-Path $m.file -Leaf
+        $attributable = @($compileErrors | Where-Object { $_ -match [regex]::Escape($leaf) })
+        if ($compileErrors.Count -gt 0 -and $attributable.Count -gt 0) {
+            Write-Host ("  caught        {0}  (does not compile: {1})" -f $m.name, $attributable[0].Trim()) -ForegroundColor Green
             $caught++
+        } elseif ($compileErrors.Count -gt 0) {
+            Write-Host ("  DOUBTFUL      {0}  (the build failed in another file: {1})" -f $m.name, $compileErrors[0].Trim()) -ForegroundColor Yellow
+            $doubtful += "$($m.name)  [$($m.file)]  <- $($compileErrors[0].Trim())"
         } else {
             $first = @($log | Where-Object { $_ -match '\S' } | Select-Object -Last 1)
             Write-Host ("  DISCARDED     {0}  (the build failed and no test ran)" -f $m.name) -ForegroundColor Yellow
@@ -450,11 +512,17 @@ foreach ($m in $mutations) {
 }
 
 Write-Host ''
-Write-Host ("  {0} caught, {1} survived, {2} discarded" -f $caught, $survived.Count, $discarded.Count)
+Write-Host ("  {0} caught, {1} survived, {2} discarded, {3} doubtful" -f $caught, $survived.Count, $discarded.Count, $doubtful.Count)
 if ($survived.Count -gt 0) {
     Write-Host ''
     Write-Host 'Survivors, meaning no test asserts this behaviour:' -ForegroundColor Red
     $survived | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
+}
+if ($doubtful.Count -gt 0) {
+    Write-Host ''
+    Write-Host 'Doubtful, meaning the build failed somewhere the mutation does not touch:' -ForegroundColor Yellow
+    Write-Host 'Nothing here was proved either way. Commit the tree and run the sweep again.' -ForegroundColor Yellow
+    $doubtful | ForEach-Object { Write-Host "  - $_" -ForegroundColor Yellow }
 }
 
 Get-Baseline | Out-Null
@@ -471,6 +539,12 @@ if ($survived.Count -gt 0) {
     Write-Host ''
     Write-Host "FAILED - $($survived.Count) mutation(s) survived: no test asserts those behaviours." -ForegroundColor Red
     exit 1
+}
+
+if ($doubtful.Count -gt 0) {
+    Write-Host ''
+    Write-Host "INCONCLUSIVE - $($doubtful.Count) mutation(s) could not be judged: the build failed in a file they do not touch." -ForegroundColor Yellow
+    exit 3
 }
 
 Write-Host "CLEAN - all $caught mutations were caught, none survived, $($discarded.Count) discarded." -ForegroundColor Green

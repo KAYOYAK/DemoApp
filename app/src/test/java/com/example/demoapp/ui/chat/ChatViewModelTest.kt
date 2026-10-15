@@ -465,6 +465,11 @@ class ChatViewModelTest {
                 "Gave up waiting for the saved history after $polls polls. " +
                     "save: attempted=${audit.attempted} written=${audit.written} " +
                     "refusedAsOlder=${audit.refusedAsOlder} refusedAsDeleted=${audit.refusedAsDeleted}. " +
+                    // The store's own account of a move that ran out of attempts, when
+                    // there has been one. Without it this message said a save had not
+                    // landed and left the operating system's objection unrecorded,
+                    // which is what made the retry window a guess for three rounds.
+                    (audit.lastMoveRefusal?.let { "The last refused move: $it. " } ?: "") +
                     "$reached. " +
                     (when {
                         audit.attempted == 0 && viewModel != null && viewModel.saveNowCalls == 0 ->
@@ -663,7 +668,18 @@ class ChatViewModelTest {
         vm.await { it.messages.isNotEmpty() }
         // Saving is asynchronous, so the screen shows the question before the
         // file exists. A test about persistence has to wait for the disk.
-        val saved = awaitSaved { it.isNotEmpty() }.first()
+        //
+        // The wait has to name the question, not merely name a file. Loading a
+        // model persists this same conversation with no messages yet
+        // (`ChatModels` on a successful load -> `persist`), so a predicate that
+        // only asks whether a conversation exists can be satisfied by that empty
+        // version -- and `messages.first()` below then throws
+        // `java.util.NoSuchElementException: List is empty`. A stress batch of
+        // one hundred and fifty runs caught exactly that once, and the write it
+        // was waiting for was never missing.
+        val asked = "What is a haiku?"
+        val saved = awaitSaved { list -> list.any { c -> c.messages.any { m -> m.text == asked } } }
+            .first { c -> c.messages.any { m -> m.text == asked } }
         assertEquals("What is a haiku?", saved.messages.first().text)
         assertEquals("The title comes from the first question", "What is a haiku?", saved.title)
     }
@@ -801,7 +817,11 @@ class ChatViewModelTest {
         // Saving is asynchronous, so the file is written after the screen
         // changes. Reading the directory here raced the write and sometimes
         // found nothing at all.
-        val onDisk = awaitSaved { it.isNotEmpty() }
+        //
+        // The wait names the two messages, because the conversation that is on
+        // disk while a model is loading has none of them yet, and a predicate
+        // that only asked whether something was there would read that one.
+        val onDisk = awaitSaved { list -> list.any { it.messages.size == 2 } }
         assertEquals("The old conversation must not be lost", 1, onDisk.size)
         assertEquals(2, onDisk.first().messages.size)
     }
@@ -1461,8 +1481,9 @@ class ChatViewModelTest {
             listOf("a question", "an answer"),
             vm.state.value.messages.map { it.text },
         )
-        val onDisk = awaitSaved { it.isNotEmpty() }.first()
-        assertEquals("And still on disk", 2, onDisk.messages.size)
+        val onDisk = awaitSaved { list -> list.any { it.messages.size == 2 } }
+            .first { it.messages.size == 2 }
+        assertEquals("And still on disk", listOf("a question", "an answer"), onDisk.messages.map { it.text })
     }
 
     @Test
@@ -1776,15 +1797,27 @@ class ChatViewModelTest {
         engine.emit(GenerationEvent.Done("beta", 10, 1))
         vm.await { it.messages.size == 2 }
 
-        // Wait for the save, not just for the screen. The screen shows a message`n        // a few milliseconds before it reaches disk, and reading straight away`n        // finds an empty directory rather than an unchanged one.
+        // Wait for the save, not just for the screen. The screen shows a message
+        // a few milliseconds before it reaches disk, and reading straight away
+        // finds an empty directory rather than an unchanged one.
+        //
+        // Both reads name the two-message conversation for the same reason: the
+        // version on disk while the model is loading has no messages, and a
+        // predicate that accepted it would compare zero with zero and pass
+        // without having looked at the conversation at all.
         val resetsBefore = engine.resetCount
-        val onDiskBefore = awaitSaved { it.isNotEmpty() }.first().messages.size
+        val onDiskBefore = awaitSaved { list -> list.any { it.messages.size == 2 } }
+            .first { it.messages.size == 2 }
+            .messages.size
 
         vm.setSearchQuery("alpha")
         vm.await { it.searching }
 
         assertEquals("A search must not rebuild the runtime", resetsBefore, engine.resetCount)
-        assertEquals(onDiskBefore, awaitSaved { it.isNotEmpty() }.first().messages.size)
+        val onDiskAfter = awaitSaved { list -> list.any { it.messages.size == 2 } }
+            .first { it.messages.size == 2 }
+            .messages.size
+        assertEquals(onDiskBefore, onDiskAfter)
     }
 
     @Test

@@ -176,12 +176,28 @@ class FileChatStore(
         val refusedAsOlder: Int,
         /** Writes that actually reached the filesystem. */
         val written: Int,
+        /**
+         * The last move that used up every attempt, or null when none has.
+         *
+         * The failure a caller sees does not carry this. `Files.move` throws a
+         * `FileSystemException` whose message is `source -> target` plus a reason
+         * that a Windows host does not always supply, and it is caught and
+         * reported as a save error -- so two rounds of widening
+         * [MOVE_RETRY_MILLIS] were spent without ever learning what refused the
+         * move. What is recorded here is the exception's own class, its reason or
+         * the fact that none was given, and how many attempts waited how long, so
+         * the next occurrence answers the question instead of widening a guess.
+         */
+        val lastMoveRefusal: String?,
     )
 
     private var savesAttempted = 0
     private var savesRefusedAsDeleted = 0
     private var savesRefusedAsOlder = 0
     private var savesWritten = 0
+
+    /** The last refusal that outlived every attempt. See [SaveAudit.lastMoveRefusal]. */
+    private var lastMoveRefusal: String? = null
 
     /**
      * The four counts, as they stand.
@@ -197,7 +213,13 @@ class FileChatStore(
      * They are incremented in [save], under [writeLock], on the path each one names.
      */
     internal fun saveAudit(): SaveAudit =
-        SaveAudit(savesAttempted, savesRefusedAsDeleted, savesRefusedAsOlder, savesWritten)
+        SaveAudit(
+            savesAttempted,
+            savesRefusedAsDeleted,
+            savesRefusedAsOlder,
+            savesWritten,
+            lastMoveRefusal,
+        )
 
     private val json = Json {
         prettyPrint = true
@@ -314,8 +336,13 @@ class FileChatStore(
                     // written and synced, the operation is idempotent, and whatever
                     // holds the target holds it for a moment: a few short attempts
                     // cost nothing and turn an intermittent failed save into a save.
-                    // Past them the refusal is the caller's to hear about.
-                    if (attempt >= MOVE_ATTEMPTS) throw refused
+                    // Past them the refusal is the caller's to hear about, and its
+                    // own account is kept for the report. See
+                    // [SaveAudit.lastMoveRefusal].
+                    if (attempt >= MOVE_ATTEMPTS) {
+                        lastMoveRefusal = describeRefusal(refused, attempt)
+                        throw refused
+                    }
                     Thread.sleep(MOVE_RETRY_MILLIS[attempt - 1])
                     attempt++
                 }
@@ -443,9 +470,19 @@ class FileChatStore(
          * -- a virus scanner that has just seen the file closed, a search indexer --
          * and it does not let go on a fixed schedule. The first version waited 20 ms
          * three times; a stress batch on 2026-10-15 caught a refusal that outlived all
-         * three, and a batch of sixty caught one that outlived six, so the window now
-         * runs to most of a second. The first waits stay short so the ordinary case is
-         * not slowed down by the rare one.
+         * three, a batch of sixty caught one that outlived six, and a batch of a
+         * hundred and fifty caught one that outlived seven, so the window now runs
+         * past three seconds. The first waits stay short so the ordinary case is not
+         * slowed down by the rare one.
+         *
+         * Widening is a guess, and the measurements say it is a partly right one: the
+         * rate fell from three in forty to one in sixty to one in a hundred and fifty
+         * as the window grew, which is the shape of a refuser that lets go after a
+         * while. The part that stops it being a guess is
+         * [SaveAudit.lastMoveRefusal]: every widening before that was done without
+         * knowing what the operating system objected to, because the failure the
+         * caller sees carries no reason. See the entry on `c80b15cb` in
+         * `docs/OPEN-WIRING.md`.
          *
          * What refuses the move in practice is a Windows host running this suite under
          * a Gradle daemon with a scanner watching the tree; the same code on a device's
@@ -454,7 +491,7 @@ class FileChatStore(
          * file reads back as an unreadable conversation, which is worse than a save
          * that says it failed.
          */
-        val MOVE_RETRY_MILLIS = longArrayOf(10L, 25L, 50L, 100L, 200L, 400L)
+        val MOVE_RETRY_MILLIS = longArrayOf(10L, 25L, 50L, 100L, 200L, 400L, 800L, 1600L)
 
         /** How many times a refused move is tried before the save is reported as failed. */
         val MOVE_ATTEMPTS = MOVE_RETRY_MILLIS.size + 1
@@ -508,4 +545,27 @@ private fun replaceFile(from: File, to: File) {
     } catch (e: java.nio.file.AtomicMoveNotSupportedException) {
         Files.move(from.toPath(), to.toPath(), StandardCopyOption.REPLACE_EXISTING)
     }
+}
+
+/**
+ * What refused the move, in the terms the retry schedule is guessing about.
+ *
+ * The class is named rather than implied. A `FileSystemException` from a Windows
+ * host is a sharing violation as often as it is anything else, and `reason` is
+ * the only field that says which of them it was; the message the caller ends up
+ * with does not always carry it. A refusal with no reason is recorded as its own
+ * answer, because "the operating system did not say" and "we never looked" are
+ * different facts about the same failure -- and the three widenings of
+ * [FileChatStore.MOVE_RETRY_MILLIS] before this function existed were made without
+ * telling them apart.
+ *
+ * [attempts] is what the loop used, and the waits it slept are summed from the
+ * same schedule it read, so the report cannot describe a window other than the
+ * one that was actually waited.
+ */
+private fun describeRefusal(refused: IOException, attempts: Int): String {
+    val waited = FileChatStore.MOVE_RETRY_MILLIS.take(attempts - 1).sum()
+    val reason = (refused as? java.nio.file.FileSystemException)?.reason
+    return "${refused.javaClass.simpleName} reason=${reason ?: "none given"} " +
+        "after $attempts attempts in ${waited}ms"
 }

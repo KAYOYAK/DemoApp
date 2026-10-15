@@ -1005,8 +1005,8 @@ run, not to reason about it further" — was taken. Three counters were added, a
 production path, all `internal`:
 
 - `FileChatStore.saveAudit()`: `attempted`, `refusedAsDeleted`, `refusedAsOlder`,
-  `written`. **Attempted is incremented after the `withContext(Dispatchers.IO)` hop**,
-  which turns out to matter.
+  `written`, and `lastMoveRefusal`. **Attempted is incremented after the
+  `withContext(Dispatchers.IO)` hop**, which turns out to matter.
 - `ChatViewModel.saveNowCalls` and `saveNowThroughLock`: how many times `saveNow` was
   entered, and how many times it got through `saveLock` to the `chatStore.save` call.
 
@@ -1427,17 +1427,31 @@ nothing about. The test's fifteen seconds had nothing to do with it; the write h
 failed.
 
 The fix, in `data/chat/ChatStore.kt`: the rename is retried on a widening schedule —
-`MOVE_RETRY_MILLIS = [10, 25, 50, 100, 200, 400]`, so `MOVE_ATTEMPTS` is seven and the window
-runs to most of a second — and a refusal that survives all of them is thrown to the caller,
-which reports it as it always did. (It started at three attempts 20 ms apart, which a batch
-below then caught failing; six attempts then failed the same way in one run of sixty, which is
-why the last wait is 400 ms.) The retry
+`MOVE_RETRY_MILLIS = [10, 25, 50, 100, 200, 400, 800, 1600]`, so `MOVE_ATTEMPTS` is nine and
+the window runs to just over three seconds — and a refusal that survives all of them is thrown
+to the caller, which reports it as it always did. (It started at three attempts 20 ms apart,
+which a batch below then caught failing; six attempts then failed the same way in one run of
+sixty; seven failed once in a hundred and fifty.) The retry
 goes through a constructor parameter (`moveFile: (File, File) -> Unit = ::replaceFile`), and
 that is what makes it testable: `FileChatStoreTest` passes a move that refuses the first
 attempt and asserts the save still lands, and a move that refuses every attempt and asserts
 the caller hears about it with the temporary file cleaned up. A mutation anchor breaks the
-retry (`if (attempt >= MOVE_ATTEMPTS) throw refused` → `throw refused`), so the behaviour is
-held up by a test rather than by this paragraph.
+retry (the guard `if (attempt >= MOVE_ATTEMPTS) {` → `if (true) {`, which reports the first
+refusal instead of trying again), so the behaviour is held up by a test rather than by this
+paragraph.
+
+**The account the refusal leaves behind, and why it is worth more than the fourth widening.**
+Every widening above was decided without knowing what refused the move: `Files.move` throws a
+`FileSystemException` whose message is `source -> target` plus a reason, and the reason is what
+separates a sharing violation from a read-only target from a full disk. `saveAudit()` carries
+`lastMoveRefusal` now, written by `describeRefusal` as the exception's own class, its reason or
+the fact that none was given, and the attempts with the waits summed from the same schedule the
+loop read — so a report cannot describe a window other than the one that was waited.
+`FileChatStoreTest` asserts all three parts against a move that refuses with `read-only` every
+time, and two mutation anchors break the reason and the sum. The next occurrence answers the
+question instead of becoming a fourth widening — and if the answer turns out to be permanent
+(a read-only target, a full disk), the schedule would be three seconds spent to report
+something it could report at once, which is the question the line is there to settle.
 
 Three consequences worth recording:
 
@@ -1512,7 +1526,58 @@ history after 964 polls … attempted=3 written=2 … error=string#2131624131 de
 case. Widening the schedule rather than changing what the last attempt does is the choice here
 because `Files.move` after a sync is idempotent and the source file is intact, so waiting costs
 only the rare case; copying over the target can leave a torn file that reads back as an
-unreadable conversation, and deleting the target first gives up the atomic replace. A third
-batch, 150 runs, measures the window that is now in the code.
+unreadable conversation, and deleting the target first gives up the atomic replace.
+
+## A third batch of a hundred and fifty: two shapes, and the second one was the test
+
+`150 runs: 148 executed and passed, 2 did not pass`, one per shape.
+
+**Shape one, once in a hundred and fifty, the rename again** — run 12, `switching back to an
+earlier version changes what is shown`: `Gave up waiting for the saved history after 965 polls.
+save: attempted=5 written=4 … viewModel: saveNowCalls=5 throughLock=5 error=string#2131624131
+detail='…\chats\c80b15cb-7d24-4ce5-8f74-a36fd1c56ddb.5fcd7b8f….tmp -> …\chats\c80b15cb….json'`.
+Five saves were decided and four landed, so the fifth used up seven attempts and was still
+refused: 785 ms was not the worst case either. The rate is what matters and it moved as the
+window grew — **3 in 40, then 1 in 60, then 1 in 150** — which is the shape of a refuser that
+lets go after a while rather than one that never does. The schedule now ends `…, 400, 800, 1600`
+ms, nine attempts, just over three seconds.
+
+Two things are worth more than the third widening:
+
+- **The failure the caller sees carries no reason.** `Files.move` throws a
+  `FileSystemException` whose message is `source -> target` plus a reason, and the reason is
+  what distinguishes a sharing violation from a permissions failure from a full disk. Three
+  widenings were decided without it. `FileChatStore.saveAudit()` now carries
+  `lastMoveRefusal`, written by `describeRefusal`, naming the exception class, the reason or
+  the fact that none was given, and the attempts and total wait — so the next occurrence
+  answers the question instead of becoming a fourth widening. `FileChatStoreTest` asserts all
+  three parts against a move that refuses with `read-only` every time.
+- **The retry is still a guess in one direction**: it can only help if the refuser lets go. If
+  the reason turns out to be permanent — a read-only target, a full disk — the schedule would
+  be waiting three seconds to report something it could report at once. The audit line is what
+  will tell the two apart, and the batch that follows is where it will show up.
+
+**Shape two, once in a hundred and fifty, was not a lost write at all.** Run 104, `the question
+is on disk before the answer exists`: `java.util.NoSuchElementException: List is empty`. The
+test waited with
+
+```kotlin
+val saved = awaitSaved { it.isNotEmpty() }.first()
+assertEquals("What is a haiku?", saved.messages.first().text)
+```
+
+and `isNotEmpty()` asks whether *a conversation* is on disk, not whether *the question* is. A
+successful model load persists the current conversation — `ChatModels`, on `result.onSuccess ->
+persist(updated)` — and at that moment it has no messages, so the file that satisfied the wait
+could be that empty version. `messages.first()` on it throws exactly that exception. The write
+was never missing; the assertion looked at the wrong conversation.
+
+Four waits had this shape (`ChatViewModelTest` at the question-is-on-disk test, the
+new-chat-keeps-the-old-one test, the regenerate-after-unload test, and the search-does-not-write
+test — the last of which compared zero with zero and would have passed while measuring
+nothing). All four now name the content they are waiting for. This is the same lesson as the
+counter that never moved, one level down: **a wait whose predicate can be satisfied by the
+wrong thing is not a wait**, and it took a hundred and fifty runs and a stack trace to see it.
+
 
 
