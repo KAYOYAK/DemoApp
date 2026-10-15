@@ -1,0 +1,47 @@
+// Prints the artifacts a Gradle configuration resolves to, one per line, as
+// `<group>:<module>:<version>|<absolute file path>`.
+//
+// Why this exists: `gradlew :app:dependencies` names the coordinates in the graph
+// and downloads nothing. A gate that reads artifacts out of the Gradle cache after
+// that call therefore checks whatever happens to be in the cache -- which on a
+// fresh CI runner is nothing, and the embedded-notice gate reported that emptiness
+// as CLEAN. Resolving the configuration's artifacts both names them and fetches
+// them, so what the gate sees is what the app would ship.
+//
+// Usage (see Invoke-GradleArtifactList in scripts/gradle-query.ps1):
+//
+//     gradlew --init-script scripts/resolve-classpath.init.gradle \
+//         :app:resolveClasspathArtifacts -PresolveConfiguration=releaseRuntimeClasspath
+//
+// An init script rather than a task in the build: this is a query the gates make,
+// it needs no Android SDK to answer beyond what configuring the project already
+// needs, and it stays out of the build files the app ships.
+
+gradle.projectsEvaluated {
+    // An init script has no `providers`; the -P properties arrive here.
+    def properties = gradle.startParameter.projectProperties
+    def projectPath = properties.getOrDefault('resolveProject', ':app')
+    def configurationName = properties.getOrDefault('resolveConfiguration', 'releaseRuntimeClasspath')
+    def target = gradle.rootProject.project(projectPath)
+
+    target.tasks.register('resolveClasspathArtifacts') {
+        // The task's subject is a configuration's files, read at execution time, which
+        // is not something Gradle can store in the configuration cache -- and a
+        // configuration-cache problem *fails the build*, so without this the gate
+        // would report a build failure where it meant to report a list.
+        notCompatibleWithConfigurationCache('the gates ask for a configuration’s files at execution time')
+        doLast {
+            def artifacts = target.configurations.getByName(configurationName)
+                .incoming.artifacts.artifacts
+            def lines = artifacts.collect { artifact ->
+                def id = artifact.id.componentIdentifier
+                def coordinates = (id instanceof org.gradle.api.artifacts.component.ModuleComponentIdentifier)
+                    ? "${id.group}:${id.module}:${id.version}".toString()
+                    : id.displayName
+                "${coordinates}|${artifact.file.absolutePath}".toString()
+            }
+            lines.sort().each { println it }
+            println "RESOLVED ${lines.size()} artifact(s) from ${configurationName}"
+        }
+    }
+}

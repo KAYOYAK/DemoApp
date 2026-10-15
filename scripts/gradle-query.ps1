@@ -168,14 +168,28 @@ function Invoke-GradleQuery {
         Wall-clock budget per attempt. Defaults to 180, which is roughly ten times
         what a warm daemon needs on this machine.
 
+        .PARAMETER Arguments
+        Wrapper arguments. Defaults to the dependency report for `-Configuration`. A
+        caller that needs the artifact files themselves passes the init-script task
+        instead: naming the graph downloads nothing, which is how
+        check-embedded-notices.ps1 came to report an empty cache as CLEAN.
+
         .OUTPUTS
-        The dependency report as a single string.
+        The command's standard output as a single string.
     #>
     param(
         [Parameter(Mandatory)][string] $Root,
         [Parameter(Mandatory)][string] $Configuration,
-        [int] $TimeoutSeconds = 0
+        [int] $TimeoutSeconds = 0,
+        [string[]] $Arguments
     )
+
+    if (-not $Arguments) {
+        $Arguments = @('-q', ':app:dependencies', '--configuration', $Configuration, '--console=plain')
+    }
+    # Quoted per argument rather than joined and hoped for: the init-script invocation
+    # carries a -P property whose value contains a colon.
+    $argumentLine = ($Arguments | ForEach-Object { if ($_ -match '[\s:]') { "'$_'" } else { $_ } }) -join ' '
 
     if ($TimeoutSeconds -le 0) { $TimeoutSeconds = $script:gradleQueryDefaultTimeout }
 
@@ -204,7 +218,7 @@ function Invoke-GradleQuery {
             -RedirectStandardOutput $outFile -RedirectStandardError $errFile `
             -ArgumentList @(
                 '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
-                ('& ''{0}'' -q '':app:dependencies'' --configuration {1} --console=plain; exit $LASTEXITCODE' -f $gradlew, $Configuration)
+                ('& ''{0}'' {1}; exit $LASTEXITCODE' -f $gradlew, $argumentLine)
             ) -ErrorAction Stop
 
         $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -264,4 +278,68 @@ function Invoke-GradleQuery {
     throw ("Gradle did not answer twice for $Configuration (${TimeoutSeconds}s each time). " +
            "The daemon is not responding on this machine. It has been stopped and its registry " +
            "cleared; check $where for a daemon-*.out.log that is zero bytes and rerun.")
+}
+
+function Invoke-GradleArtifactList {
+    <#
+        .SYNOPSIS
+        Resolves a configuration's artifacts and returns them with their coordinates.
+
+        .DESCRIPTION
+        The dependency report names the graph; it downloads nothing. A gate that reads
+        artifacts out of the Gradle cache after asking for the report therefore checks
+        whatever happens to be cached, and on a fresh CI runner that is nothing -- which
+        is how the embedded-notice gate reported CLEAN over zero artifacts on every CI
+        run. This asks Gradle for the resolved files instead, which fetches them.
+
+        .PARAMETER Root
+        Project root that holds `gradlew`.
+
+        .PARAMETER Configuration
+        Configuration to resolve, for example `releaseRuntimeClasspath`.
+
+        .PARAMETER Project
+        Project path the configuration belongs to. Defaults to `:app`.
+
+        .PARAMETER TimeoutSeconds
+        Wall-clock budget per attempt, passed to the query runner.
+
+        .OUTPUTS
+        Objects with `Coordinates` (`group:module:version`) and `Path` (absolute file).
+    #>
+    param(
+        [Parameter(Mandatory)][string] $Root,
+        [Parameter(Mandatory)][string] $Configuration,
+        [string] $Project = ':app',
+        [int] $TimeoutSeconds = 0
+    )
+
+    $initScript = Join-Path $Root 'scripts/resolve-classpath.init.gradle'
+    if (-not (Test-Path $initScript)) { throw "resolve-classpath.init.gradle not found at $initScript" }
+
+    $raw = Invoke-GradleQuery -Root $Root -Configuration $Configuration -TimeoutSeconds $TimeoutSeconds -Arguments @(
+        '--init-script', 'scripts/resolve-classpath.init.gradle',
+        ('{0}:resolveClasspathArtifacts' -f $Project),
+        ('-PresolveProject={0}' -f $Project),
+        ('-PresolveConfiguration={0}' -f $Configuration),
+        '--console=plain'
+    )
+
+    $items = [System.Collections.Generic.List[object]]::new()
+    foreach ($line in ($raw -split "\r?\n")) {
+        $trimmed = $line.Trim()
+        $bar = $trimmed.IndexOf('|')
+        if ($bar -le 0) { continue }
+        $coordinates = $trimmed.Substring(0, $bar)
+        if ($coordinates -notmatch '^[a-zA-Z0-9_.\-]+:[a-zA-Z0-9_.\-]+:[^|]+$') { continue }
+        $items.Add([pscustomobject]@{
+            Coordinates = $coordinates
+            Path        = $trimmed.Substring($bar + 1)
+        })
+    }
+
+    if ($items.Count -eq 0) {
+        throw "Gradle resolved $Configuration to no artifact:`n$raw"
+    }
+    return $items
 }

@@ -37,7 +37,26 @@ Set-Location $root
 # Untracked files are ignored: build output lands in one, and a stray file cannot
 # change what the compiler does with the mutated source.
 if (-not $AllowDirty) {
-    $dirty = @(git status --porcelain --untracked-files=no)
+    # A mode-only change is not an uncommitted edit. `chmod +x ./gradlew`, which the CI
+    # workflow runs before anything else, shows up as ` M gradlew` and changes nothing
+    # the compiler reads -- and this guard refused the sweep on exactly that, in CI, on
+    # every run, which turned a check into an obstacle.
+    #
+    # git reports a mode-only change in --numstat as `0	0	<path>`, so the counts are
+    # the test. HEAD is the left side because an edit that is already staged shows
+    # nothing in the unstaged diff, and this guard has to see those too.
+    $dirty = [System.Collections.Generic.List[string]]::new()
+    foreach ($line in @(git status --porcelain --untracked-files=no)) {
+        if ($line.Length -lt 4) { $dirty.Add($line); continue }
+        $path = $line.Substring(3).Trim('"')
+        $edited = $false
+        foreach ($stat in @(git diff --numstat HEAD -- $path)) {
+            $fields = $stat -split "`t"
+            if ($fields.Count -lt 3) { continue }
+            if ($fields[0] -ne '0' -or $fields[1] -ne '0') { $edited = $true }
+        }
+        if ($edited) { $dirty.Add($line) }
+    }
     if ($dirty.Count -gt 0) {
         Write-Host "REFUSED - the working tree carries uncommitted changes:" -ForegroundColor Red
         $dirty | ForEach-Object { Write-Host "  $_" }
