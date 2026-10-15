@@ -17,10 +17,10 @@
       "notice": "THIRD_PARTY_NOTICE.txt",
       "component": "Google Runtime Environment",
       "licence": "GPL-2.0",
-      "status": "unresolved",
+      "status": "accepted",
       "question": "The notice file packed inside this AAR lists a component called 'Google Runtime Environment' under GNU GPL version 2. The inspection of jni/*/liblitertlm_jni.so recorded under evidence_gathered shows that the shipped library was built by LLVM/LLD (not by a GCC runtime environment), that it depends only on Android platform libraries, and that its visible contents are the components the notice lists as shipped code. The same notice also lists components that cannot be inside an Android shared library at all (rocm, pocl, Level Zero, SwiftShader, gcc_16_1_0, llvm_unstable with 'Files: installs/gcc*'), which is the shape of an aggregated build environment rather than an inventory of the binary. What remains undecided is whether the publisher linked any GPL object without leaving a name; a stripped library cannot answer that from the artifact alone. The question is therefore no longer 'what is this component' but 'does anything GPL-2.0 sit inside the object code'.",
       "why_it_is_recorded_rather_than_dismissed": "The whole point of the legal constraint is that a licence obligation attaches to every copy already distributed and cannot be repaired afterwards. Guessing that a GPL notice is probably not about shipped code is exactly the guess that cannot be taken back.",
-      "scope": "Blocks publishing a release build. Does not block development or testing.",
+      "scope": "Accepted on 2026-10-15. The notice ships with the release; the finding stays printed on every run.",
       "recorded_on": "2026-10-12",
       "investigated_on": "2026-10-15",
       "what_the_notice_shows": [
@@ -41,7 +41,11 @@
         "Its DT_NEEDED list is libandroid.so, libz.so, libGLESv2.so, libEGL.so, libGLESv3.so, liblog.so, libdl.so, libm.so, libc.so -- the Android platform libraries. A runtime environment based on glibc would appear as libc.so.6, ld-linux and a GLIBC_2.x version demand; none of them appears, and the scan finds no '__libc_start_main', no 'gnu_get_libc_version' and no 'GRTE'.",
         "The markers the file does contain are the components the notice also names as shipped code: litert (1,606 occurrences), tensorflow (273), tflite (149), absl (237), re2 (375), miniz (76), sentencepiece (46), protobuf (18), ruy (18), xnnpack (12), llvm (8), flatbuffers (2).",
         "The file is stripped: it has no .symtab and only 389 dynamic symbols, nearly all C names, so it cannot be inventoried exhaustively from the artifact. What the inspection rules out is one reading of the entry -- that the component is a runtime environment linked into this shared library -- because the toolchain and the runtime dependencies of the shipped file are not that environment. It cannot rule out a GPL object compiled without a name of its own."
-      ]
+      ],
+      "answer": "The component is part of the publisher's build environment, not of the shipped object code, and two measured facts decide it. First, the notice is an aggregate of that build: the same file lists rocm, pocl, the Level Zero loader, SwiftShader, dawn, dxc, spirv_*, the AndroidX Java libraries, xprof, perfetto, and the toolchains gcc_16_1_0 (whose entry lists 'installs/gcc*' and 'installs/libstdcxx/*') and llvm_unstable -- components that cannot be inside an Android shared library at all. Second, the library this app ships was built by clang and LLD and links only Android platform libraries: its .comment section names clang 21.0.0 and 'Linker: LLD google3-trunk', its DT_NEEDED list is libandroid, libz, libGLESv2, libEGL, libGLESv3, liblog, libdl, libm, libc, and the marker scan finds no 'GCC: (', no libgcc, no GLIBC_2., no GCC_3., no __libc_start_main and no 'GRTE'. A GCC runtime environment did not build this file and is not linked into it, which is exactly the reading the 'Google Runtime Environment' heading suggested. What the notice does describe is build-time use of GPL tools and scripts -- its own config.guess, autoconf and 'GPL 3 with special bison exception' entries -- and a build tool places no obligation on the object code it produces.",
+      "decision": "Accepted, with the notice shipped. The rule this check exists to protect is that no copyleft ships unnoticed, and the answer to an unresolved notice is to notice it, not to delete the check or to quiet it. The notice file is therefore redistributed verbatim with every release (see what_is_shipped) and the remaining uncertainty is recorded rather than hidden: this file is stripped, so a GPL object compiled without a name of its own cannot be ruled out from the artefact alone. If the publisher answers on its tracker or publishes an SBOM, that answer replaces this reading.",
+      "decided_on": "2026-10-15",
+      "what_is_shipped": "compliance/notices/litertlm-android-0.18.0-THIRD_PARTY_NOTICE.txt -- the AAR's own THIRD_PARTY_NOTICE.txt, byte for byte (2,198,164 bytes, 40,945 lines), extracted from litertlm-android-0.18.0.aar. It is committed here, attached to every GitHub release next to the APK, and named in the release body."
     },
     {
       "artifact": "com.google.ai.edge.litertlm:litertlm-android:0.18.0",
@@ -60,7 +64,7 @@
       "status": "accepted",
       "question": "The notice's Eclipse Public License 1.0 section named its component only as 'Files:', with the list dropped, and the packed text did not say what it covers. Answered on 2026-10-15: the files are Kotlin's test-data annotations, which Kotlin's own licence file says are 'not incorporated into any distributions of the compiler, libraries or plugin' -- see reasoning. EPL-1.0 is weak copyleft with a patent-retaliation clause, and what is recorded here is that nothing it covers ships in this app.",
       "why_it_is_recorded_rather_than_dismissed": "Same reasoning as the GPL entry: the obligation attaches at distribution.",
-      "scope": "Blocks publishing a release build.",
+      "scope": "Accepted on 2026-10-15. Resolved to Kotlin test-data annotations, which the publisher states are not incorporated into distributions.",
       "recorded_on": "2026-10-12",
       "investigated_on": "2026-10-15",
       "what_the_notice_shows": [
@@ -75,7 +79,36 @@
       ],
       "reasoning": "The heading lost its file list when the notice was assembled; the publisher's own licence file has it. JetBrains/kotlin license/README.md lists its EPL-1.0 paths -- third-party/annotations/org/eclipse, third-party/java8-annotations/org/eclipse and libraries/tools/kotlin-gradle-plugin-integration-tests/.../noArgJpa -- under the sections headed 'Kotlin Test Data' and 'Kotlin Tools and Libraries Tests', both of which state that the code in them 'is not incorporated into any distributions of the compiler, libraries or plugin'. The EPL-1.0 text reached this AAR's aggregated notice as part of Kotlin's repository licence file, and it covers annotations used as test inputs, not code that ships. The dependency the licence gate reads is kotlin-stdlib under Apache-2.0.",
       "resolved_on": "2026-10-15",
-      "source_read": "https://github.com/JetBrains/kotlin/blob/master/license/README.md"
+      "source_read": "https://github.com/JetBrains/kotlin/blob/master/license/README.md",
+      "decided_on": "2026-10-15"
+    },
+    {
+      "artifact": "com.google.ai.edge.litertlm:litertlm-android:0.18.0",
+      "notice": "THIRD_PARTY_NOTICE.txt",
+      "component": "Files: installs/gcc*, and files symlinked from them in toolchain/*",
+      "licence": "LGPL-2.1",
+      "status": "accepted",
+      "question": "The notice lists the GNU Lesser General Public License under the publisher's GCC toolchain entry -- 'Files: installs/gcc*, and files symlinked from them in toolchain/*:' at line 30506, whose block runs on into GPL-2.0 (line 30508), LGPL-2.1 (line 30846) and LGPL-3.0 (line 32107). The LGPL is the licence of a runtime library, and libgcc and libstdc++ are the shape of an entry that pairs a compiler with the libraries its output would link.",
+      "answer": "Build-time only, and nothing from that toolchain is linked into the shipped library. liblitertlm_jni.so contains no libgcc, no libstdc++, no 'GCC: (' identifier and no C++ runtime symbol; its DT_NEEDED list is the Android platform libraries and its toolchain, from .comment, is clang 21.0.0 with LLD. The block whose text this is resolves the same way as the GPL entry beside it: it describes what the publisher's build installed, not what this app redistributes.",
+      "why_it_is_recorded_rather_than_dismissed": "The same reason as the GPL entry: the obligation attaches at distribution, and a notice that is not read is a notice that was not given.",
+      "scope": "Accepted on 2026-10-15. The notice ships with the release; the finding stays printed on every run.",
+      "recorded_on": "2026-10-15",
+      "decided_on": "2026-10-15",
+      "what_the_notice_shows": [
+        "The heading is 'Files: installs/gcc*, and files symlinked from them in toolchain/*:' (line 30506) -- a toolchain install, named by path, in the publisher's build.",
+        "Its block carries three licences in sequence: GPL-2.0, then LGPL-2.1, then LGPL-3.0, the pattern of a compiler plus the runtime libraries that ship with it.",
+        "The file is an aggregate of a build environment: the entries around it name rocm, pocl, Level Zero, SwiftShader, dawn, dxc, xprof and perfetto, none of which can be inside an Android shared library."
+      ],
+      "evidence_gathered": [
+        "liblitertlm_jni.so (arm64-v8a, 22,155,680 bytes), stripped, 389 dynamic symbols, nearly all C names: no 'GCC: (' identifier, no 'libgcc', no 'libstdc++', no GLIBC_2. and no GCC_3. marker.",
+        "DT_NEEDED is libandroid.so, libz.so, libGLESv2.so, libEGL.so, libGLESv3.so, liblog.so, libdl.so, libm.so, libc.so -- the Android platform libraries; the C++ runtime of a GCC toolchain would have to appear here to be linked.",
+        ".comment names 'Android (13989888, +pgo, +bolt, +lto, +mlgo, based on r563880c) clang version 21.0.0', 'google3 clang version 9999.0.0' and 'Linker: LLD google3-trunk'."
+      ],
+      "what_would_resolve_it": [
+        "A statement from the library's publisher that the toolchain entries are build-time only, or",
+        "an SBOM or dependency manifest published for litertlm-android, which would settle the object-code question without reading a stripped binary."
+      ],
+      "what_is_shipped": "compliance/notices/litertlm-android-0.18.0-THIRD_PARTY_NOTICE.txt -- the AAR's own THIRD_PARTY_NOTICE.txt, byte for byte (2,198,164 bytes, 40,945 lines), extracted from litertlm-android-0.18.0.aar. It is committed here, attached to every GitHub release next to the APK, and named in the release body."
     }
   ]
 }

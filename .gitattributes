@@ -43,6 +43,11 @@
 *.mp4  binary
 *.webm binary
 
+# Embedded notices are redistributed exactly as their publisher wrote them, carriage
+# returns included. The file is the licence text being shipped, so a normalised copy is
+# a different document -- and the release attaches this file beside the APK.
+compliance/notices/** -text
+
 # Generated files: keep them out of diffs and out of "language stats".
 gradlew        text eol=lf
 gradlew.bat    text eol=crlf
