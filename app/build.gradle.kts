@@ -92,8 +92,8 @@ android {
         // cheap direction -- a target below the compile level is the one that gets
         // behaviour the code was not written against.
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.0.1"
 
         // The inference runtime is the constraint, not a preference.
         //
