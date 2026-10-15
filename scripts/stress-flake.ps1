@@ -147,7 +147,11 @@ try {
                 Detail = "exit $($r.ExitCode), no test XML: this run says nothing about the code"
             }
             Write-Host ("  run {0,3} NO-TESTS {1,4}s  exit {2}" -f $i, $secs, $exit)
-            $r.Output | Out-File -Encoding utf8 (Join-Path $outRoot ("run-{0:d3}.log" -f $i))
+            # The stamp is the run's end, not its start: a batch that takes twenty minutes
+            # cannot otherwise be read against anything else that happened on the machine,
+            # and "which run was this, and when" is the first question a flake asks.
+            $logHeader = "run {0,3} ended {1} ({2}s, exit {3}, {4} tests) -- the console output follows" -f $i, (Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz'), $secs, $exit, $ran
+            @($logHeader) + $r.Output | Out-File -Encoding utf8 (Join-Path $outRoot ("run-{0:d3}.log" -f $i))
             continue
         }
 
@@ -191,7 +195,8 @@ try {
         # Keep the run's raw output next to the summary: the detail above is a
         # projection, and the projection is what was wrong often enough that the
         # summary alone should not be trusted.
-        $r.Output | Out-File -Encoding utf8 (Join-Path $outRoot ("run-{0:d3}.log" -f $i))
+        $logHeader = "run {0,3} ended {1} ({2}s, exit {3}, {4} tests) -- the console output follows" -f $i, (Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz'), $secs, $exit, $ran
+        @($logHeader) + $r.Output | Out-File -Encoding utf8 (Join-Path $outRoot ("run-{0:d3}.log" -f $i))
     }
 
     Write-Host ''
