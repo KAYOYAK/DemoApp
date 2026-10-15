@@ -99,8 +99,12 @@ jobs:
           set -euo pipefail
           echo "APK_SHA256=$(sha256sum "$APK_PATH" | cut -d' ' -f1)" >> "$GITHUB_ENV"
           APKSIGNER=$(find "${ANDROID_HOME}/build-tools" -name apksigner | sort | tail -1)
+          # apksigner names the same digest differently across versions: "Signer #1
+          # certificate SHA-256 digest:" in some, "V2 Signer: certificate SHA-256 digest:" in
+          # others. Anchoring on the part that cannot move is what keeps this from publishing
+          # "(not reported)" for an APK that is signed -- which is what the first release did.
           RAW=$("$APKSIGNER" verify --print-certs "$APK_PATH" |
-                sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1 | tr -d ':')
+                sed -n 's/.*certificate SHA-256 digest: //p' | head -1 | tr -d ':')
           if [ -n "$RAW" ]; then
             echo "APK_SIGNER=$(printf '%s' "$RAW" | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')" >> "$GITHUB_ENV"
           else
