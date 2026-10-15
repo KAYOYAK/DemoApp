@@ -72,6 +72,16 @@ private const val AWAIT_TIMEOUT_MS = 15_000L
  */
 private const val QUIESCENCE_TIMEOUT_MS = 3_000L
 
+/**
+ * Makes a refusal the retries recovered from a failure in this class.
+ *
+ * Set by `scripts/stress-flake.ps1` through `-Pdemoapp.refusalWatch`, which
+ * `app/build.gradle.kts` forwards into the test JVM. Without it a recovered refusal is
+ * recorded in the save audit and reported in the timeout message, and no test fails --
+ * which is what CI wants, because the save landed.
+ */
+private const val REFUSAL_WATCH_PROPERTY = "demoapp.refusalWatch"
+
 /** Stands in for the real runtime: no model file, no native library. */
 private class FakeEngine : LlmEngine {
     private val _state = MutableStateFlow<EngineState>(EngineState.Idle)
@@ -196,6 +206,11 @@ class ChatViewModelTest {
 
     @After
     fun tearDown(): Unit = runBlocking {
+        // First, before anything that could throw and bury it: a refusal this test's saves
+        // recovered from, when the run is watching for one. See
+        // [refusalsAbsorbedByTheWindow].
+        refusalsAbsorbedByTheWindow()
+
         store.clear()
 
         // Wait for the ViewModels this test built to stop, and for the work they
@@ -470,6 +485,14 @@ class ChatViewModelTest {
                     // landed and left the operating system's objection unrecorded,
                     // which is what made the retry window a guess for three rounds.
                     (audit.lastMoveRefusal?.let { "The last refused move: $it. " } ?: "") +
+                    // The other half of that account. A refusal the retries absorbed is
+                    // not a failure and does not reach `lastMoveRefusal`, but it can be
+                    // the reason a wait times out: a run whose moves are refused often
+                    // enough spends its window sleeping. Without this the message reads
+                    // as a timeout with nothing refusing anything.
+                    (audit.lastAbsorbedMoveRefusal?.let {
+                        "Refusals a later attempt made (${audit.absorbedMoveRefusals}): $it. "
+                    } ?: "") +
                     "$reached. " +
                     (when {
                         audit.attempted == 0 && viewModel != null && viewModel.saveNowCalls == 0 ->
@@ -500,6 +523,38 @@ class ChatViewModelTest {
                 t,
             )
         }
+    }
+
+    /**
+     * Reports a refusal this test's saves recovered from, when the run is watching for one.
+     *
+     * A save that landed after the file system refused a move is not a failure: the user sees
+     * nothing and the conversation is on disk. So this is silent by default and a green suite
+     * keeps the meaning it had -- every save landed.
+     *
+     * [REFUSAL_WATCH_PROPERTY] is what turns it into the instrument the refusal never had.
+     * `scripts/stress-flake.ps1` runs the batch with it, and the count below is then a
+     * failure carrying the operating system's own words, instead of another clean run that
+     * says nothing about refusals. A hundred and fifty of those were read as evidence
+     * before this existed, and the retry window was widened three times on their strength.
+     *
+     * Called from [tearDown] so it covers every test in the class rather than the ones that
+     * happen to wait on a save. It reads the store this class hands to the ViewModel, so a
+     * refusal absorbed by a second store a test builds for itself is not seen here -- that
+     * store's own audit is where it is recorded.
+     */
+    private fun refusalsAbsorbedByTheWindow() {
+        val audit = chatStore.saveAudit()
+        if (audit.absorbedMoveRefusals == 0) return
+        if (System.getProperty(REFUSAL_WATCH_PROPERTY) == null) return
+        throw AssertionError(
+            "The file system refused a move and the retry window absorbed it " +
+                "(${audit.absorbedMoveRefusals} time(s) in this test): " +
+                "${audit.lastAbsorbedMoveRefusal ?: "no account"}. " +
+                "The save landed, so nothing failed here -- and this is the reason that was " +
+                "never known when MOVE_RETRY_MILLIS was widened three times. A window short " +
+                "enough to run out would have failed this test instead.",
+        )
     }
 
     /**

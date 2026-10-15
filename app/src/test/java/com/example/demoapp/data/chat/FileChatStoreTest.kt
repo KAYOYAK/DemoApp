@@ -566,6 +566,11 @@ class FileChatStoreTest {
      * the second attempt lands. Without the retry the user is told the conversation
      * could not be saved while nothing was ever wrong with the data, which is what
      * this project's own unit suite kept doing under load.
+     *
+     * That the retry works is also why a run in which every save lands says nothing
+     * about whether anything was refused: this save succeeded, and without the audit
+     * below it would leave no trace that the file system refused anything at all --
+     * which is how a hundred and fifty clean stress runs were read before.
      */
     @Test
     fun `a move refused once is tried again rather than reported as a failed save`(): Unit = runBlocking {
@@ -585,6 +590,26 @@ class FileChatStoreTest {
 
         assertEquals("the second attempt is what put it there", 2, attempts)
         assertEquals("keep me", flaky.load("c1")?.title)
+
+        // The recovery is recorded, so a save that landed after a refusal is not the
+        // same evidence as a save that was never refused. This number and this account
+        // are what a stress batch reads. See
+        // [FileChatStore.SaveAudit.absorbedMoveRefusals].
+        val after = flaky.saveAudit()
+        assertEquals("the absorbed refusal is counted", 1, after.absorbedMoveRefusals)
+        val absorbed = after.lastAbsorbedMoveRefusal
+        assertNotNull("and its account is kept", absorbed)
+        assertTrue(
+            "the operating system's own reason is in it: $absorbed",
+            absorbed!!.contains("reason=held by something else"),
+        )
+        assertTrue(
+            "and it says the save landed rather than that it gave up: $absorbed",
+            absorbed.startsWith("absorbed: ") &&
+                absorbed.contains("after 2 attempts") &&
+                absorbed.contains("in ${FileChatStore.MOVE_RETRY_MILLIS[0]}ms"),
+        )
+        assertNull("a recovered refusal is not the reported one", after.lastMoveRefusal)
     }
 
     /**
@@ -616,7 +641,13 @@ class FileChatStoreTest {
         // occurrence of a refused move from another widening of the schedule into
         // a diagnosis: the operating system's reason, which the message the caller
         // ends up with does not always carry.
-        val refusal = refused.saveAudit().lastMoveRefusal
+        val audit = refused.saveAudit()
+        assertEquals(
+            "a refusal that outlived every attempt was not absorbed by one",
+            0,
+            audit.absorbedMoveRefusals,
+        )
+        val refusal = audit.lastMoveRefusal
         assertNotNull("the refusal is recorded", refusal)
         assertTrue(
             "the operating system's own reason is in it, not just the fact: $refusal",

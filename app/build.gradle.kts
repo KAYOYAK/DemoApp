@@ -252,3 +252,21 @@ dependencies {
   implementation(libs.androidx.navigation3.runtime)
   implementation(libs.androidx.lifecycle.viewmodel.navigation3)
 }
+
+// A project property crosses into the test JVM only when it is forwarded. `-D` on a Gradle
+// command line sets a property on the daemon, and the test task forks its own process with
+// its own system properties -- and the daemon outlives the invocation, so an environment
+// variable set by a later caller does not reach it either.
+//
+// `demoapp.refusalWatch` is the property that needs this. Set, it makes a move refusal that
+// the retry window recovered from a failure in `ChatViewModelTest`: that is the only way a
+// run reports what the file system objected to, because the save lands and nothing fails on
+// its own. Three widenings of `MOVE_RETRY_MILLIS` were made without that reason, so
+// `scripts/stress-flake.ps1` passes `-Pdemoapp.refusalWatch=1` and every other build --
+// CI included -- passes nothing, which leaves a recovered refusal a recorded fact instead
+// of a failure. See `FileChatStore.SaveAudit.absorbedMoveRefusals`.
+tasks.withType<Test>().configureEach {
+  providers.gradleProperty("demoapp.refusalWatch").orNull?.let {
+    systemProperty("demoapp.refusalWatch", it)
+  }
+}

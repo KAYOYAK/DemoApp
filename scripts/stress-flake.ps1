@@ -94,7 +94,18 @@ try {
             param($dir, $filter, $cls)
             Set-Location $dir
             $env:JAVA_HOME = 'D:\Program Files\Eclipse Adoptium\jdk-25.0.4.101-hotspot'
-            $out = & .\gradlew.bat -q :app:testDebugUnitTest --console=plain --rerun $filter $cls 2>&1
+            # `-Pdemoapp.refusalWatch` is this batch's instrument, not a convenience. A move
+            # refusal that the retry window recovers from is not a failure -- the save lands
+            # -- so without it this script can only report that nothing outlived the window,
+            # which is what three widenings of the window were justified with and what left
+            # the file system's own reason unread. With it, an absorbed refusal fails the
+            # test that saw it and the reason comes out in the message, which is what this
+            # run's summary then carries. The property is forwarded into the test JVM by
+            # `app/build.gradle.kts`.
+            # The property is quoted because PowerShell splits it otherwise: Gradle sees
+            # `-Pdemoapp` and `.refusalWatch=1` as two arguments and fails with "Task
+            # '.refusalWatch=1' not found". The quotes are load-bearing.
+            $out = & .\gradlew.bat -q :app:testDebugUnitTest --console=plain --rerun "-Pdemoapp.refusalWatch=1" $filter $cls 2>&1
             [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = ($out | Out-String) }
         } -ArgumentList $ProjectDir, $filter, $filterArg
 
@@ -196,6 +207,7 @@ try {
     $lines = @(
         ("{0} runs: {1} executed and passed, {2} did not pass" -f $Runs, $passed, $failures.Count)
         ("class filter: {0}" -f $TestClass)
+        ('refusal watch: on -- a move the file system refused and the retries recovered from fails a test and names its reason')
         ("finished: {0}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz'))
         ("machine: {0}" -f $env:COMPUTERNAME)
     )
@@ -203,7 +215,13 @@ try {
         $lines += ($failures | Format-Table -AutoSize | Out-String -Width 400).TrimEnd()
     }
     else {
-        $lines += 'No failure in this batch. That is a result about this machine, not about the code.'
+        # The caveat is not the same sentence as it was before the watch existed. A clean
+        # batch now says two things: every save landed, and through the tests this class
+        # runs, no move was refused at all. It is still bounded by the tests that reached
+        # a save -- a refusal the store absorbed while no test was watching is not reported
+        # -- and it is still a statement about this machine.
+        $lines += 'No failure in this batch, and the refusal watch saw no refused move either.'
+        $lines += 'Every save landed and nothing had to be retried: about this machine, through the saves these tests make.'
     }
     ($lines -join "`n") | Out-File -Encoding utf8 $summary
     Write-Host "summary: $summary"
@@ -215,7 +233,8 @@ try {
         }
         exit 1
     }
-    Write-Host 'No failure in this batch. That is a result about this machine, not about the code.'
+    Write-Host 'No failure in this batch, and the refusal watch saw no refused move either.'
+    Write-Host 'Every save landed and nothing had to be retried: about this machine, through the saves these tests make.'
     exit 0
 }
 finally {

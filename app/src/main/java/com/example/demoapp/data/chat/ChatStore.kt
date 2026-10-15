@@ -187,8 +187,26 @@ class FileChatStore(
          * move. What is recorded here is the exception's own class, its reason or
          * the fact that none was given, and how many attempts waited how long, so
          * the next occurrence answers the question instead of widening a guess.
+         *
+         * This is the half that got told. The refusals the window absorbs are the
+         * other half and leave nothing behind -- see [absorbedMoveRefusals].
          */
         val lastMoveRefusal: String?,
+        /**
+         * Moves the file system refused and a later attempt then made.
+         *
+         * A clean batch reports zero failures, and that is a different fact from zero
+         * refusals: it is the fact that none outlived the window. Three widenings of
+         * [MOVE_RETRY_MILLIS] were made while this number went unrecorded, so each one
+         * traded an observable failure for an unobservable recovery and whatever the
+         * operating system objected to stayed unread. A run against the store with the
+         * `demoapp.refusalWatch` system property reports this count as a failure with
+         * [lastAbsorbedMoveRefusal] attached, which is how an occurrence names its
+         * cause instead of being absorbed -- see `scripts/stress-flake.ps1`.
+         */
+        val absorbedMoveRefusals: Int,
+        /** The account of the most recent absorbed move refusal. See [absorbedMoveRefusals]. */
+        val lastAbsorbedMoveRefusal: String?,
     )
 
     private var savesAttempted = 0
@@ -198,6 +216,15 @@ class FileChatStore(
 
     /** The last refusal that outlived every attempt. See [SaveAudit.lastMoveRefusal]. */
     private var lastMoveRefusal: String? = null
+
+    /**
+     * Refusals the retries recovered from.
+     *
+     * See [SaveAudit.absorbedMoveRefusals] for why the number is worth keeping: it is
+     * the only record that a move was refused at all on a run where every save landed.
+     */
+    private var absorbedMoveRefusals = 0
+    private var lastAbsorbedMoveRefusal: String? = null
 
     /**
      * The four counts, as they stand.
@@ -219,6 +246,8 @@ class FileChatStore(
             savesRefusedAsOlder,
             savesWritten,
             lastMoveRefusal,
+            absorbedMoveRefusals,
+            lastAbsorbedMoveRefusal,
         )
 
     private val json = Json {
@@ -327,9 +356,19 @@ class FileChatStore(
             }
 
             var attempt = 1
+            // The refusal the retries are carrying, if any. The attempt that succeeds is
+            // the one that knows a refusal happened, and by then it no longer has the
+            // exception: without this the recovery is silent, and a run where every save
+            // lands reads the same whether nothing was refused or the window absorbed a
+            // refusal. See [SaveAudit.absorbedMoveRefusals].
+            var absorbed: IOException? = null
             while (true) {
                 try {
                     moveFile(temp, target)
+                    if (absorbed != null) {
+                        absorbedMoveRefusals++
+                        lastAbsorbedMoveRefusal = describeAbsorbedRefusal(absorbed, attempt)
+                    }
                     break
                 } catch (refused: IOException) {
                     // A refusal that is not about the data. The source has been
@@ -343,6 +382,7 @@ class FileChatStore(
                         lastMoveRefusal = describeRefusal(refused, attempt)
                         throw refused
                     }
+                    absorbed = refused
                     Thread.sleep(MOVE_RETRY_MILLIS[attempt - 1])
                     attempt++
                 }
@@ -569,3 +609,16 @@ private fun describeRefusal(refused: IOException, attempts: Int): String {
     return "${refused.javaClass.simpleName} reason=${reason ?: "none given"} " +
         "after $attempts attempts in ${waited}ms"
 }
+
+/**
+ * The account of a refusal the retries recovered from, in [describeRefusal]'s terms.
+ *
+ * [attempts] is the attempt that made the move, which is also how many were used, so
+ * the waits it reports are the ones actually slept before it landed.
+ *
+ * The word is in the string rather than left to the field name, because this string is
+ * read on its own: a batch failure prints it with no name beside it, and "after 2
+ * attempts in 10ms" by itself reads as a save that gave up rather than one that landed.
+ */
+private fun describeAbsorbedRefusal(refused: IOException, attempts: Int): String =
+    "absorbed: " + describeRefusal(refused, attempts)
