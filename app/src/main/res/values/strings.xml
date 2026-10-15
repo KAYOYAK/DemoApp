@@ -11,7 +11,17 @@
       sentence reworded later may reorder them.
     -->
 
-    <string name="app_name" translatable="false">NULL</string>
+    <!--
+      The launcher's name: what the string `NULL` was replaced by.
+
+      `NULL` is what a generator writes when nobody has named the app yet, and the launcher
+      was showing it — through the release build, the signing and the published APK. The
+      name is the user's to choose, so this line carries the one the repository, the release
+      and the APK already use, and nothing else has to move with it: the lock screen and the
+      diagnostics subject take their copy of it from here (%1$s), which is why they are not
+      three names to keep in step.
+    -->
+    <string name="app_name" translatable="false">DemoApp</string>
 
     <!-- ============================================================ 对话页 === -->
 
@@ -291,7 +301,7 @@
     <string name="settings_lock_off">关闭</string>
     <string name="settings_lock_explainer">开启后，每次打开应用（或离开超过 15 分钟再回来）都要先通过指纹/人脸或锁屏密码。\n\n它挡的是别人拿起你已解锁的手机，不是加密。对话仍然存在应用私有目录里，取得 root 权限或整机备份的人仍能读到。</string>
     <string name="settings_lock_unavailable">这台设备没录指纹、也没设锁屏密码，开了也没法验证。</string>
-    <string name="lock_title">NULL 已锁定</string>
+    <string name="lock_title">%1$s 已锁定</string>
     <string name="lock_body">验证身份后打开。</string>
     <string name="lock_action">解锁</string>
     <string name="lock_failed">验证没通过。</string>
@@ -401,7 +411,7 @@
     <string name="about_erase">清空这台设备上的所有数据</string>
     <string name="about_diagnostics">导出诊断信息</string>
     <string name="about_diagnostics_hint">出问题的时候，导出一份发给开发者。里面是版本、设备、内存、模型和报错信息——没有你的对话内容，导出前你可以先看。</string>
-    <string name="about_diagnostics_subject">NULL 诊断信息</string>
+    <string name="about_diagnostics_subject">%1$s 诊断信息</string>
     <string name="about_diagnostics_heading">诊断信息</string>
     <string name="about_diagnostics_app">应用</string>
     <!--

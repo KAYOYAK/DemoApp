@@ -79,7 +79,8 @@ fun LockScreen(onUnlocked: () -> Unit) {
     // change recomposes this composable and redefines `prompt` -- a local function
     // captures its surroundings again on each composition -- while a `getString`
     // call records nothing and would keep showing the old wording.
-    val title = stringResource(R.string.lock_title)
+    val appName = stringResource(R.string.app_name)
+    val title = stringResource(R.string.lock_title, appName)
     val body = stringResource(R.string.lock_body)
 
     fun prompt() {
@@ -131,7 +132,7 @@ fun LockScreen(onUnlocked: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                stringResource(R.string.lock_title),
+                stringResource(R.string.lock_title, appName),
                 style = MaterialTheme.typography.headlineSmall,
                 textAlign = TextAlign.Center,
             )

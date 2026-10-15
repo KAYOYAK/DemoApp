@@ -54,7 +54,7 @@ fun AboutScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val subject = stringResource(R.string.about_diagnostics_subject)
+    val subject = stringResource(R.string.about_diagnostics_subject, stringResource(R.string.app_name))
     val labels = diagnosticsLabels()
     // Read before the handler, not inside it: gathering these reads string
     // resources, and the click handler is not a composable.
