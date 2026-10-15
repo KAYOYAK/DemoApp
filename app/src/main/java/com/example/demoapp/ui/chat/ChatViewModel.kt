@@ -132,6 +132,23 @@ class ChatViewModel(
     internal val saveLock = Mutex()
 
     /**
+     * The scope for writes that have to finish after this ViewModel is gone.
+     *
+     * `onScreenClosed` saves the interrupted reply when the screen goes away,
+     * which is exactly when `viewModelScope` is cancelled -- so that write cannot
+     * live in it. It used to build a throwaway scope at the call site, which
+     * worked and was invisible: nothing could see the write was still in flight,
+     * including a test's teardown, so the next test's `Dispatchers.setMain` could
+     * run while this write was still unwinding on a thread that had picked up the
+     * main dispatcher. A named scope is the same behaviour with an owner that can
+     * be looked at.
+     *
+     * Deliberately never cancelled: this exists to outlive the ViewModel, and its
+     * idle state costs one suspended job.
+     */
+    internal val closingWrites = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
      * How far a write got, for reading when one does not arrive.
      *
      * `internal` rather than on the class's public surface: this is a diagnosis, not
@@ -218,25 +235,6 @@ class ChatViewModel(
     internal fun Conversation.stamp(now: Long = clock()): Long =
         maxOf(now, updatedAt + 1)
 
-    /**
-     * [conversation] with whatever title is on disk, where that is the newer one.
-     *
-     * This screen holds the copy it read when it opened the conversation, and a
-     * save carries the whole thing -- so writing that copy back silently undid a
-     * rename made on the history screen while this one was still open. The user
-     * made that change and watched it happen; losing it to a background save is
-     * the kind of thing that reads as the app forgetting.
-     *
-     * The screen decides a title exactly once, when the first message names a
-     * conversation that has none. A conversation on disk with no messages is one
-     * whose name has not been decided yet, so that save keeps its own title.
-     * Afterwards the stored title is the newer statement about it.
-     *
-     * The deferral lives here rather than in [com.example.demoapp.data.chat.ChatStore]
-     * because only the caller knows it is holding a copy that may have gone stale.
-     * The store cannot tell a rename from a chat save that happens to carry an old
-     * title, and a rule it applied to both would refuse the rename itself.
-     */
     /**
      * The title this screen is working from, for telling its own edits apart from
      * everyone else's.

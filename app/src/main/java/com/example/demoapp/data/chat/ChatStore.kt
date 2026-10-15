@@ -442,11 +442,19 @@ class FileChatStore(
          * per entry. The waits grow because what refuses the move is another process
          * -- a virus scanner that has just seen the file closed, a search indexer --
          * and it does not let go on a fixed schedule. The first version waited 20 ms
-         * three times; on 2026-10-15 a stress batch caught a refusal that outlived all
-         * three, so the window now runs to a few hundred milliseconds. The first
-         * waits stay short so the ordinary case is not slowed down by the rare one.
+         * three times; a stress batch on 2026-10-15 caught a refusal that outlived all
+         * three, and a batch of sixty caught one that outlived six, so the window now
+         * runs to most of a second. The first waits stay short so the ordinary case is
+         * not slowed down by the rare one.
+         *
+         * What refuses the move in practice is a Windows host running this suite under
+         * a Gradle daemon with a scanner watching the tree; the same code on a device's
+         * own file system has never been seen to refuse. That is also why the last
+         * resort stays a reported failure rather than a copy over the target: a torn
+         * file reads back as an unreadable conversation, which is worse than a save
+         * that says it failed.
          */
-        val MOVE_RETRY_MILLIS = longArrayOf(10L, 25L, 50L, 100L, 200L)
+        val MOVE_RETRY_MILLIS = longArrayOf(10L, 25L, 50L, 100L, 200L, 400L)
 
         /** How many times a refused move is tried before the save is reported as failed. */
         val MOVE_ATTEMPTS = MOVE_RETRY_MILLIS.size + 1

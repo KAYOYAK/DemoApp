@@ -106,6 +106,11 @@ internal suspend fun ChatViewModel.saveNow(conversation: Conversation) {
  *    conversation and then sending a message in it would silently unpin it, and
  *    the user would watch the change they just made come undone.
  *
+ * The screen decides a title exactly once, when the first message names a
+ * conversation that has none. A conversation on disk with no messages is one
+ * whose name has not been decided yet, so that save keeps its own title.
+ * Afterwards the stored title is the newer statement about it.
+ *
  * The deferral lives here rather than in [com.example.demoapp.data.chat.ChatStore]
  * because only the caller knows it is holding a copy that may have gone stale.
  * The store cannot tell a rename from a chat save that happens to carry an old

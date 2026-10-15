@@ -237,8 +237,8 @@ class ChatViewModelTest {
     private val built = java.util.Collections.synchronizedList(mutableListOf<androidx.lifecycle.ViewModel>())
 
     /**
-     * Blocks until no tracked ViewModel has a live coroutine, or the budget runs
-     * out.
+     * Blocks until no tracked ViewModel has a coroutine that has not finished, or
+     * the budget runs out.
      *
      * Bounded, because this is a test helper and a bug that leaves a coroutine
      * spinning should fail the test it is in rather than hang the suite. On expiry
@@ -247,18 +247,15 @@ class ChatViewModelTest {
      * way to be wrong.
      *
      * Polling rather than joining, because a ViewModel's work is a tree: a write on
-     * IO finishes and schedules the reload that comes back to Main, so "no live
-     * coroutine right now" and "done" are different instants. Two quiet turns in a
+     * IO finishes and schedules the reload that comes back to Main, so "nothing
+     * running right now" and "done" are different instants. Two quiet turns in a
      * row is the cheap way to ask for both.
      */
     private suspend fun awaitQuiescence() {
         val deadline = System.nanoTime() + QUIESCENCE_TIMEOUT_MS * 1_000_000L
         var quietTurns = 0
         while (System.nanoTime() < deadline) {
-            val busy = built.any { viewModel ->
-                viewModel.viewModelScope.coroutineContext[Job]?.children?.any { it.isActive } == true
-            }
-            if (!busy) {
+            if (!built.any { it.hasWorkInFlight() }) {
                 quietTurns++
                 if (quietTurns >= 2) return
             } else {
@@ -270,6 +267,30 @@ class ChatViewModelTest {
             // answer stops changing.
             withContext(Dispatchers.IO) { }
         }
+    }
+
+    /**
+     * Whether this ViewModel still has a coroutine that has not finished.
+     *
+     * This asks `!isCompleted` rather than `isActive`, and that distinction is the
+     * whole point. Teardown clears the store first, so the usual state at this
+     * moment is a *cancelled* coroutine that has not unwound yet -- it reads as
+     * inactive while its resumption back to the main dispatcher is still queued, so
+     * the previous `isActive` version answered "quiet" and swapped the dispatcher
+     * out from under it. That is what "Dispatchers.Main is used concurrently with
+     * setting it" was: 2 runs in 40 of the stress batch, reported against whichever
+     * test happened to be starting.
+     *
+     * `closingWrites` is watched as well because it is deliberately not part of
+     * `viewModelScope`: an interrupted reply is saved there when the screen closes,
+     * and while it used to be a throwaway scope built at the call site, nothing --
+     * including this teardown -- could see that the write was still running.
+     */
+    private fun androidx.lifecycle.ViewModel.hasWorkInFlight(): Boolean {
+        fun androidx.lifecycle.ViewModel.watching(job: kotlinx.coroutines.Job?): Boolean =
+            job?.children?.any { !it.isCompleted } == true
+        return watching(viewModelScope.coroutineContext[Job]) ||
+            watching((this as? ChatViewModel)?.closingWrites?.coroutineContext?.get(Job))
     }
 
     /**
@@ -873,6 +894,32 @@ class ChatViewModelTest {
         val state = vm.await { !it.generating && it.error != null }
         assertEquals("half an ans", state.messages.last().text)
         assertTrue("A partial reply must be marked as interrupted", state.messages.last().interrupted)
+    }
+
+    @Test
+    fun `leaving mid-reply writes the part that arrived`(): Unit = runBlocking {
+        // Back instead of Stop is not a statement that the tokens were unwanted. The
+        // write happens after viewModelScope has been cancelled, which is why it goes
+        // to closingWrites and not there -- and why this test can see it finish: the
+        // scope it used to build at the call site was invisible to everything,
+        // including the harness that swaps the dispatcher.
+        installModel()
+        val vm = newViewModel()
+        vm.await { it.modelId != null }
+        vm.send("hello")
+        vm.await { it.generating }
+        engine.emit(GenerationEvent.Token("half an ans"))
+        vm.await { it.streaming == "half an ans" }
+
+        vm.onScreenClosed()
+
+        val saved = awaitSaved { conversations ->
+            conversations.any { it.messages.lastOrNull()?.text == "half an ans" }
+        }.first { it.messages.lastOrNull()?.text == "half an ans" }
+        assertTrue(
+            "A reply cut short by the screen closing must be marked as interrupted",
+            saved.messages.last().interrupted,
+        )
     }
 
     @Test

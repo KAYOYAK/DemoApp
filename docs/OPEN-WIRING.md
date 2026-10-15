@@ -1427,9 +1427,11 @@ nothing about. The test's fifteen seconds had nothing to do with it; the write h
 failed.
 
 The fix, in `data/chat/ChatStore.kt`: the rename is retried on a widening schedule —
-`MOVE_RETRY_MILLIS = [10, 25, 50, 100, 200]`, so `MOVE_ATTEMPTS` is six — and a refusal that
-survives all of them is thrown to the caller, which reports it as it always did. (It started
-at three attempts 20 ms apart, which the stress batch below then caught failing.) The retry
+`MOVE_RETRY_MILLIS = [10, 25, 50, 100, 200, 400]`, so `MOVE_ATTEMPTS` is seven and the window
+runs to most of a second — and a refusal that survives all of them is thrown to the caller,
+which reports it as it always did. (It started at three attempts 20 ms apart, which a batch
+below then caught failing; six attempts then failed the same way in one run of sixty, which is
+why the last wait is 400 ms.) The retry
 goes through a constructor parameter (`moveFile: (File, File) -> Unit = ::replaceFile`), and
 that is what makes it testable: `FileChatStoreTest` passes a move that refuses the first
 attempt and asserts the save still lands, and a move that refuses every attempt and asserts
@@ -1480,9 +1482,9 @@ whole story:
   `err_conversation_save` with a `.tmp -> .json` path, and `attempted=3 written=2` — three
   attempts, all refused, 20 ms apart. A scanner holding the target for longer than 60 ms
   defeats that schedule, and the fix as first written only narrowed the window rather than
-  closing it. Now the waits are `[10, 25, 50, 100, 200]` ms, six attempts, which no plausible
-  scanner pass outlasts; what a save costs in the ordinary case is 10 ms, once, and only when
-  the file system refuses.
+  closing it. The waits then became `[10, 25, 50, 100, 200]` ms — and the second batch below
+  caught one refusal that outlived all six, so they now run to 400 ms more. What a save costs
+  in the ordinary case is 10 ms, once, and only when the file system refuses.
 - **2 runs hit `IllegalStateException: Dispatchers.Main is used concurrently with setting
   it`**, in two tests each. This is the teardown hole the class's `awaitQuiescence` was
   written for, and it is still open: the class waits for the ViewModels it tracks to go quiet
@@ -1492,9 +1494,25 @@ whole story:
   call site, so it is attributed to whichever test happened to be starting when a previous
   class's work came back to Main.
 
-The second one is not fixed here. What it has now is a rate (2 in 40), a name, and the
-harness it belongs to; `ci.yml` retries the suite **once**, with the reason written beside
-the retry, so a run that hits the harness race is retried rather than reported as a broken
-tree — and the local stress batch stays the honest counter, because it never retries.
+The second one was then fixed, and the shape of the miss is the point: `onScreenClosed` started
+its closing save on a scope the test did not track, so the write could reach Main after
+`resetMain()`. That write now registers in `closingWrites`, `awaitQuiescence` waits while it is
+not completed, and `leaving mid-reply writes the part that arrived` covers the path. The rate
+it is measured against is 2 in 40, and the batch that followed hit the harness race not at all
+— consistent with a fix, not proof of one.
+
+`ci.yml` retries the suite **once**, with the reason written beside the retry, so a run that
+hits a platform race is retried rather than reported as a broken tree — and the local stress
+batch stays the honest counter, because it never retries.
+
+A second batch of sixty runs, after both fixes: `60 runs: 59 executed and passed, 1 did not
+pass`. The failure was the rename again, not the harness race — `Gave up waiting for the saved
+history after 964 polls … attempted=3 written=2 … error=string#2131624131 detail='…tmp ->
+….json'`, three attempts every one refused, so six was still narrower than this machine's worst
+case. Widening the schedule rather than changing what the last attempt does is the choice here
+because `Files.move` after a sync is idempotent and the source file is intact, so waiting costs
+only the rare case; copying over the target can leave a torn file that reads back as an
+unreadable conversation, and deleting the target first gives up the atomic replace. A third
+batch, 150 runs, measures the window that is now in the code.
 
 

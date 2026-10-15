@@ -233,9 +233,10 @@ fun ChatViewModel.deleteMessage(messageId: String) {
  * Stop is not a statement that it is not.
  *
  * The framework closes a ViewModel's closeables -- where `viewModelScope`
- * lives -- before calling `onCleared()`, so this cannot use that scope and
- * makes its own. The partial is read here rather than in the write, because
- * the state is gone by the time the write runs.
+ * lives -- before calling `onCleared()`, so this cannot use that scope: it
+ * writes on [ChatViewModel.closingWrites] instead. The partial is read here
+ * rather than in the write, because the state is gone by the time the write
+ * runs.
  */
 fun ChatViewModel.onScreenClosed() {
     val target = conversation
@@ -256,12 +257,11 @@ fun ChatViewModel.onScreenClosed() {
         updatedAt = target.stamp(interrupted.createdAt),
     )
 
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    scope.launch {
+    closingWrites.launch {
         // A failure here has nobody left to tell; refusing to write is the
         // only other option and loses the reply.
         runCatching { chatStore.save(updated) }
-    }.invokeOnCompletion { scope.cancel() }
+    }
 }
 
 /**
