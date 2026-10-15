@@ -40,7 +40,7 @@ referred to -- and no claim is made to any of them.
 | Kotlin, JetBrains | JetBrains s.r.o. | Language and libraries used to build the app |
 | OkHttp, Okio | Square, Inc. | Dependencies |
 | Gradle | Gradle, Inc. | Build system |
-| Pokémon, Pikachu | Nintendo, Creatures Inc., GAME FREAK Inc.; administered by The Pokémon Company | The launcher icon — see below |
+| Pokémon, Pikachu | Nintendo, Creatures Inc., GAME FREAK Inc.; administered by The Pokémon Company | The launcher icon until 2026-10-15 — see below |
 
 This table is kept accurate as the catalogue changes. It is not a claim that the
 list is exhaustive: a name may appear in a dependency's own metadata, which this
@@ -51,34 +51,36 @@ is [THIRD_PARTY_LICENSES.md](../THIRD_PARTY_LICENSES.md).
 included in this repository or in the app.** Nothing here reproduces a company's
 visual identity.
 
-### One icon is not covered by that sentence
+### The icon that was not covered by that sentence, and is gone
 
-**The app's launcher icon is a drawing of Pikachu**, a character owned by
-Nintendo, Creatures Inc., and GAME FREAK Inc., and administered by The Pokémon
-Company. It is used here as the application's own icon.
+**Until 2026-10-15 the app's launcher icon was a drawing of Pikachu**, a character
+owned by Nintendo, Creatures Inc., and GAME FREAK Inc., and administered by The
+Pokémon Company. It was used as the application's own icon, and this document
+recorded it as a known violation rather than glossing over it — the paragraph above
+would otherwise have been false, and a false claim of that kind is worse than the
+risk it hides: anyone reading this document is entitled to know exactly what is in
+the build.
 
-This is recorded rather than glossed over because the paragraph above would
-otherwise be false, and a false claim of that kind is worse than the risk it
-hides: anyone reading this document is entitled to know exactly what is in the
-build.
+**Nothing in this build uses it.** The icon is now geometry drawn for this project —
+a processor outline with a speech bubble in `app/src/main/res/drawable-*/ic_launcher_foreground.png`,
+masked by the adaptive icon in `app/src/main/res/mipmap-anydpi/`, on the same
+`#20201E` background the app already carried — so the paragraph above is true of
+this build, and the one item here that a takedown request could have been entirely
+right about is closed.
 
-What it is not:
+What it meant while it lasted, kept because the reasoning is what a fork inherits:
 
-- Not a claim of any right in the character, and not a claim of affiliation with
-  or endorsement by any of those companies.
-- Not part of this project's licence. The MIT licence covers the code in this
-  repository; **it does not and cannot cover that image.**
-- Not redistributable by anyone who takes this code and ships it. A fork must
-  supply its own icon before it is published.
+- Not a claim of any right in the character, and not a claim of affiliation with or
+  endorsement by any of those companies.
+- Not part of this project's licence. The MIT licence covered the code in this
+  repository; **it did not and could not cover that image.**
+- A fork that took this code while the image was in it had to supply its own icon
+  before publishing, and a request about the icon would have been honoured without
+  argument.
 
-What it means for anyone publishing this app -- including its own author, on a
-store: the image is a separate, unresolved question, and it is the one item in
-this repository that a takedown request could be entirely right about. The
-process in section 5 applies, and a request about the icon would be honoured
-without argument.
-
-Replacing it is a one-file change: `app/src/main/res/mipmap-*` and the adaptive
-icon in `app/src/main/res/mipmap-anydpi-v26/`.
+The one-file shape of that replacement, for anyone doing it in a fork:
+`app/src/main/res/drawable-*/ic_launcher_foreground.png` and the adaptive icon in
+`app/src/main/res/mipmap-anydpi/`.
 
 ---
 

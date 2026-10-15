@@ -59,12 +59,13 @@ lands, not reviewed after.
   a phone can do.
 - Reusing a company's logo, wordmark or artwork to describe which model the app
   can run. Names may be used descriptively; brand assets may not be used at all.
-  **The app's current launcher icon breaks this rule** — it is a drawing of a
-  character owned by another company. The rule is not weakened to accommodate it:
-  the icon is recorded as a known violation, in
+  **Until 2026-10-15 the app's launcher icon broke this rule** — it was a drawing
+  of a character owned by another company. The rule was not weakened to
+  accommodate it: the icon was recorded as a known violation, in
   [legal/TRADEMARKS-AND-CLAIMS.md](legal/TRADEMARKS-AND-CLAIMS.md), with what it
-  would take to remove. A principle quietly edited to match what was already
-  shipped is not a principle.
+  would take to remove, and then it was replaced with geometry drawn for this
+  project. A principle quietly edited to match what was already shipped is not a
+  principle.
 - Merging a contribution whose author cannot state that the work is theirs.
 
 ### Enforcement
