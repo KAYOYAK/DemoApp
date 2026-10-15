@@ -18,7 +18,7 @@
       "component": "Google Runtime Environment",
       "licence": "GPL-2.0",
       "status": "unresolved",
-      "question": "The notice file packed inside this AAR lists a component called 'Google Runtime Environment' under GNU GPL version 2. The artefact does not say whether that component is linked into jni/*/liblitertlm_jni.so, which this app redistributes, or whether it is part of the environment the library was built in and is listed for completeness. Google publishes LiteRT-LM itself under Apache-2.0, which makes the second reading more likely, but 'more likely' is not a legal position.",
+      "question": "The notice file packed inside this AAR lists a component called 'Google Runtime Environment' under GNU GPL version 2. The inspection of jni/*/liblitertlm_jni.so recorded under evidence_gathered shows that the shipped library was built by LLVM/LLD (not by a GCC runtime environment), that it depends only on Android platform libraries, and that its visible contents are the components the notice lists as shipped code. The same notice also lists components that cannot be inside an Android shared library at all (rocm, pocl, Level Zero, SwiftShader, gcc_16_1_0, llvm_unstable with 'Files: installs/gcc*'), which is the shape of an aggregated build environment rather than an inventory of the binary. What remains undecided is whether the publisher linked any GPL object without leaving a name; a stripped library cannot answer that from the artifact alone. The question is therefore no longer 'what is this component' but 'does anything GPL-2.0 sit inside the object code'.",
       "why_it_is_recorded_rather_than_dismissed": "The whole point of the legal constraint is that a licence obligation attaches to every copy already distributed and cannot be repaired afterwards. Guessing that a GPL notice is probably not about shipped code is exactly the guess that cannot be taken back.",
       "scope": "Blocks publishing a release build. Does not block development or testing.",
       "recorded_on": "2026-10-12",
@@ -33,7 +33,14 @@
         "A statement from the library's publisher that the component is build-time only, or",
         "an inventory of the symbols and objects linked into liblitertlm_jni.so that shows no GPL component, or",
         "a decision to treat LiteRT-LM itself as GPL-encumbered and license this project accordingly.",
-        "A reply on the publisher's tracker (github.com/google-ai-edge/LiteRT-LM) asking which of the notice's components are linked into the artifact it publishes."
+        "A reply on the publisher's tracker (github.com/google-ai-edge/LiteRT-LM) asking which of the notice's components are linked into the artifact it publishes.",
+        "An SBOM or dependency manifest published for litertlm-android by its publisher, which would settle the object-code question without reading a stripped binary."
+      ],
+      "evidence_gathered": [
+        "The shared library this app redistributes carries the toolchain that built it. liblitertlm_jni.so (arm64-v8a, 22,155,680 bytes) has a .comment section reading 'Android (13989888, +pgo, +bolt, +lto, +mlgo, based on r563880c) clang version 21.0.0', 'google3 clang version 9999.0.0' and 'Linker: LLD google3-trunk', plus a rustc build string. There is no GCC identifier anywhere in the file: the marker scan finds no 'GCC: (', no 'libgcc', no 'GLIBC_2.' and no 'GCC_3.'.",
+        "Its DT_NEEDED list is libandroid.so, libz.so, libGLESv2.so, libEGL.so, libGLESv3.so, liblog.so, libdl.so, libm.so, libc.so -- the Android platform libraries. A runtime environment based on glibc would appear as libc.so.6, ld-linux and a GLIBC_2.x version demand; none of them appears, and the scan finds no '__libc_start_main', no 'gnu_get_libc_version' and no 'GRTE'.",
+        "The markers the file does contain are the components the notice also names as shipped code: litert (1,606 occurrences), tensorflow (273), tflite (149), absl (237), re2 (375), miniz (76), sentencepiece (46), protobuf (18), ruy (18), xnnpack (12), llvm (8), flatbuffers (2).",
+        "The file is stripped: it has no .symtab and only 389 dynamic symbols, nearly all C names, so it cannot be inventoried exhaustively from the artifact. What the inspection rules out is one reading of the entry -- that the component is a runtime environment linked into this shared library -- because the toolchain and the runtime dependencies of the shipped file are not that environment. It cannot rule out a GPL object compiled without a name of its own."
       ]
     },
     {
@@ -50,8 +57,8 @@
       "notice": "THIRD_PARTY_NOTICE.txt",
       "component": "Files (EPL-1.0 section)",
       "licence": "EPL-1.0",
-      "status": "unresolved",
-      "question": "The notice contains an Eclipse Public License 1.0 section whose component heading could not be read unambiguously from the packed text; the surrounding lines name no product. EPL-1.0 is weak copyleft with a patent-retaliation clause, and the notice does not say what it covers.",
+      "status": "accepted",
+      "question": "The notice's Eclipse Public License 1.0 section named its component only as 'Files:', with the list dropped, and the packed text did not say what it covers. Answered on 2026-10-15: the files are Kotlin's test-data annotations, which Kotlin's own licence file says are 'not incorporated into any distributions of the compiler, libraries or plugin' -- see reasoning. EPL-1.0 is weak copyleft with a patent-retaliation clause, and what is recorded here is that nothing it covers ships in this app.",
       "why_it_is_recorded_rather_than_dismissed": "Same reasoning as the GPL entry: the obligation attaches at distribution.",
       "scope": "Blocks publishing a release build.",
       "recorded_on": "2026-10-12",
@@ -65,7 +72,10 @@
       "what_would_resolve_it": [
         "Reading the notice around that heading as it appears in the publisher's own repository, where the formatting is intact.",
         "Kotlin's own licenses directory, which is public and still has the file list the packed text lost."
-      ]
+      ],
+      "reasoning": "The heading lost its file list when the notice was assembled; the publisher's own licence file has it. JetBrains/kotlin license/README.md lists its EPL-1.0 paths -- third-party/annotations/org/eclipse, third-party/java8-annotations/org/eclipse and libraries/tools/kotlin-gradle-plugin-integration-tests/.../noArgJpa -- under the sections headed 'Kotlin Test Data' and 'Kotlin Tools and Libraries Tests', both of which state that the code in them 'is not incorporated into any distributions of the compiler, libraries or plugin'. The EPL-1.0 text reached this AAR's aggregated notice as part of Kotlin's repository licence file, and it covers annotations used as test inputs, not code that ships. The dependency the licence gate reads is kotlin-stdlib under Apache-2.0.",
+      "resolved_on": "2026-10-15",
+      "source_read": "https://github.com/JetBrains/kotlin/blob/master/license/README.md"
     }
   ]
 }

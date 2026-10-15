@@ -327,7 +327,14 @@ if ($Update) {
     [void]$sb.AppendLine('  section 4 requires these notices to travel with every copy.')
     [void]$sb.AppendLine('-->')
     [void]$sb.AppendLine()
-    [void]$sb.AppendLine(("Generated {0} from the `{1}` configuration ({2} artifacts)." -f (Get-Date -Format 'yyyy-MM-dd'), $Configuration, $sorted.Count))
+    # No generation date, deliberately. This line used to read
+    # `Generated 2026-10-14 from ...`, so the CI step that compares the file
+    # before and after `-Update` called it stale on the first run of the next day
+    # and on every day after -- a calendar check wearing a staleness check's name,
+    # with a message ("run -Update and commit the result") that told the reader to
+    # do something which could not fix it. When this notice was generated is in
+    # the commit that added it, and that record cannot go stale.
+    [void]$sb.AppendLine(("Generated from the `{0}` configuration ({1} artifacts)." -f $Configuration, $sorted.Count))
     [void]$sb.AppendLine()
     [void]$sb.AppendLine('## Summary')
     [void]$sb.AppendLine()

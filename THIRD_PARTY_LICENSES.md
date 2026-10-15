@@ -8,7 +8,7 @@
   section 4 requires these notices to travel with every copy.
 -->
 
-Generated 2026-10-14 from the releaseRuntimeClasspath configuration (136 artifacts).
+Generated from the releaseRuntimeClasspath configuration (136 artifacts).
 
 ## Summary
 
