@@ -1584,11 +1584,13 @@ pass` — and it left no file that said so: `build-logs\stress-b1e` holds neithe
 per-run log, because the script wrote its summary only when something failed, so a clean batch and a
 batch that never started left behind the same evidence. That is the same defect this script was built to
 find in other tools — a pass over nothing is not a pass — and it is fixed: the summary is written either
-way, and `build-logs\stress-b1f` is the batch that leaves one. The rate kept falling as the window grew,
-385 ms to 785 ms to 3,185 ms, from `3 in 40` to `1 in 60` to `1 in 150` and now to none — and the
-script prints its own caveat, which is the right one: *No failure in this batch. That is a result about
-this machine, not about the code.* Zero in a hundred and fifty bounds the rate at about two percent
-(three over n) rather than at zero, and
+way, and `build-logs\stress-b1f` is the batch that leaves one — `150 runs: 150 executed and passed, 0 did
+not pass`, above the class filter, the finish time and the machine tag, the same four lines whether the
+batch is clean or not. The rate kept falling as the window grew, 385 ms to 785 ms to 3,185 ms, from
+`3 in 40` to `1 in 60` to `1 in 150` and then to none in the two batches after that — and the script
+prints its own caveat, which is the right one: *No failure in this batch. That is a result about this
+machine, not about the code.* Zero in three hundred runs bounds the rate at about one percent (three over
+n) rather than at zero, and
 `lastMoveRefusal` never fired in these runs, so the reason the file system gives is still
 unobserved. What the batch buys is a smaller guess, not a closed question: the flake is closed by an
 occurrence that names its reason, or by a rate low enough that CI never sees it — and only the
