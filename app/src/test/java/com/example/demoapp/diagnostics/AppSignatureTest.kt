@@ -161,4 +161,74 @@ class AppSignatureTest {
 
         assertEquals(AppSignature.Verdict.UNKNOWN, verdict)
     }
+
+    @Test
+    fun `a debug build is not reported as someone else's copy`() {
+        // Every build installed from a development machine is signed with the debug
+        // key, which is in no repository and in every developer's home directory.
+        // Until this case existed, recording the release fingerprint turned every one
+        // of those installs into "this copy was not signed by this project, someone
+        // may have repackaged it" -- the same alarming answer as the fingerprint
+        // format bug, produced by the ordinary act of running a debug build.
+        val verdict = AppSignature.decide(
+            expected = setOf(ours),
+            actual = setOf(theirs),
+            debuggable = true,
+        )
+
+        assertEquals(AppSignature.Verdict.DEVELOPMENT, verdict)
+    }
+
+    @Test
+    fun `a debug build signed with the release key is still ours`() {
+        // The debug flag chooses which sentence a mismatch is reported with. It is
+        // not evidence on its own: whoever repackaged the app can set it, so a
+        // match has to win over it rather than being suppressed by it.
+        val verdict = AppSignature.decide(
+            expected = setOf(ours),
+            actual = setOf(ours),
+            debuggable = true,
+        )
+
+        assertEquals(AppSignature.Verdict.PUBLISHED, verdict)
+    }
+
+    @Test
+    fun `a release build signed by another key is not excused by the debug rule`() {
+        // The other side of the same decision: on a build that is not debuggable, a
+        // mismatch is the finding the feature exists to give.
+        val verdict = AppSignature.decide(
+            expected = setOf(ours),
+            actual = setOf(theirs),
+            debuggable = false,
+        )
+
+        assertTrue(verdict is AppSignature.Verdict.OTHER)
+    }
+
+    @Test
+    fun `the recorded release fingerprint is a fingerprint`() {
+        // The set is filled in by hand from `keytool` output, and two mistakes are
+        // silent. Emptying it turns the check back into a display that always says
+        // UNKNOWN -- the feature gone, with every other test still green, because a
+        // missing answer looks exactly like a device that will not report. A typo in
+        // it is dropped by the normaliser, which has the same effect.
+        assertEquals(1, AppSignature.expected.size)
+
+        val recorded = AppSignature.expected.single()
+        assertEquals(64, recorded.filter { it != ':' }.length)
+        assertTrue(recorded.all { it in "0123456789ABCDEF:" })
+
+        // The same value on both sides has to come back as a match. That is what
+        // proves the normaliser keeps it: a fingerprint one digit short, or with a
+        // letter outside A-F, is dropped rather than compared, and the check would go
+        // quietly back to UNKNOWN for every install while this file stayed green.
+        assertEquals(
+            AppSignature.Verdict.PUBLISHED,
+            AppSignature.decide(
+                expected = AppSignature.expected,
+                actual = AppSignature.expected,
+            ),
+        )
+    }
 }

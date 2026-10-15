@@ -366,9 +366,11 @@
     <!-- ========================================================== 关于页 === -->
 
     <string name="about_signature_title">这份副本的签名</string>
-    <string name="about_signature_body">对着公开页面上写的指纹比一下。一样，就是本项目签的；不一样，说明这个安装包是别人重新打过包的——功能看着一样，但里面可以多任何东西。</string>
+    <string name="about_signature_body">这份副本的签名是自动比对的：和本项目记录的指纹一样，就是本项目签的；不一样，说明这个安装包是别人重新打过包的——功能看着一样，但里面可以多任何东西。下面的指纹也可以和公开页面上的对照。</string>
     <string name="about_signature_none">读不出这份副本的签名。</string>
-    <string name="about_signature_unknown">本项目还没记录发布密钥，所以现在只能显示、不能自动比对。发布之后这里会填上，对不上就会直接告诉你。</string>
+    <string name="about_signature_unknown">设备没报出可比的签名，所以这里不做判断。</string>
+    <string name="about_signature_development">这是开发版，签的是调试密钥，跟发布密钥不一样是正常的。对得上发布指纹的只有发布包。</string>
+    <string name="about_signature_published">这份副本是本项目签的：签名和本项目记录的指纹一致。</string>
     <string name="about_signature_other">这份副本不是本项目签的。签名是：</string>
     <string name="about_title">关于</string>
     <string name="about_intro">一个完全在这台手机上运行语言模型的聊天应用。没有账号，没有服务器，没有统计。</string>

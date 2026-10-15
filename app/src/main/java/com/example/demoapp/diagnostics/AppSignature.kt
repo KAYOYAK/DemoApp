@@ -28,23 +28,39 @@ import java.security.MessageDigest
  * compared by someone who has both. Without it, "check the signature" is advice
  * with no way to act on it.
  *
- * ## Why the expected set is empty by default
+ * ## The expected set, and the defect that filling it exposed
  *
- * The project has no release signing key yet, so there is nothing to compare
- * against, and a check that guesses would either pass everything or fail
- * everything. Empty means "no opinion" and draws no warning. It is filled in when
- * the key exists, which is the only moment the answer is knowable.
+ * For as long as the project had no release key the set below was empty, which
+ * meant "no opinion" and drew no warning. The key exists now, so the comparison
+ * does.
+ *
+ * Filling it showed a second defect, in the half of the feature nobody had been
+ * able to run. Every build a developer installs is signed with the debug key --
+ * the emulator, an attached phone, a colleague who cloned the repository -- so on
+ * the day the release key was recorded, every one of those installs would have
+ * started saying "this copy was not signed by this project, someone may have
+ * repackaged it". That is the same alarming answer as the fingerprint-format bug,
+ * produced by the ordinary act of running a debug build. A debug build is
+ * therefore its own verdict rather than a mismatch.
  */
 object AppSignature {
 
     /**
-     * The SHA-256 fingerprints the published build is signed with.
+     * The SHA-256 of the certificate the published build is signed with.
      *
-     * Empty until there is a release key. Anything here is a claim that builds
-     * signed with these are the project's, so it belongs next to the release
-     * instructions rather than being invented now.
+     * Generated on 2026-10-15 with `keytool -genkeypair -keyalg RSA -keysize 2048
+     * -validity 10000 -alias release`. The keystore itself is not in the
+     * repository and must not be: it lives with the project owner, and CI reads it
+     * from the `RELEASE_KEYSTORE_BASE64` secret. Losing it means the app can never
+     * be updated on a device that has the old one installed, because Android
+     * refuses an update signed by a different key.
+     *
+     * The value is the certificate's SHA-256 as `keytool -list -v` prints it, which
+     * is also what the release workflow publishes next to the APK.
      */
-    val expected: Set<String> = emptySet()
+    val expected: Set<String> = setOf(
+        "52:C5:A8:B4:C0:67:A3:23:5C:1A:5A:B7:38:7D:E0:F1:62:5A:48:73:26:19:20:5F:4C:76:84:1B:5D:B9:D7:F8",
+    )
 
     /** What this installation is actually signed with, using [fingerprintOf]'s form. */
     fun fingerprints(context: Context): Set<String> {
@@ -74,8 +90,26 @@ object AppSignature {
      * rotation, or an app signed for more than one distribution -- and requiring
      * every fingerprint to match would call those tampered.
      */
-    fun verdict(context: Context): Verdict =
-        decide(expected = expected, actual = fingerprints(context))
+    fun verdict(context: Context): Verdict = decide(
+        expected = expected,
+        actual = fingerprints(context),
+        debuggable = isDebuggable(context),
+    )
+
+    /**
+     * Whether this installation is a debug build, which decides how a mismatch is
+     * read.
+     *
+     * `FLAG_DEBUGGABLE` rather than `BuildConfig.DEBUG`, because the flag describes
+     * the installation doing the asking: a release-signed build cannot carry it,
+     * and a debug-signed build that a tester sideloaded does. A copy repackaged by
+     * somebody else can flip the flag, so it is not evidence of anything on its
+     * own -- it only chooses which sentence a mismatch is reported with.
+     */
+    private fun isDebuggable(context: Context): Boolean = runCatching {
+        val flags = context.applicationInfo.flags
+        flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+    }.getOrDefault(false)
 
     /**
      * The comparison, apart from the platform call that feeds it.
@@ -84,9 +118,14 @@ object AppSignature {
      * of strings, and a decision that can only be exercised on a real device is a
      * decision that will be wrong the first time it matters.
      */
-    fun decide(expected: Set<String>, actual: Set<String>): Verdict = compare(
+    fun decide(
+        expected: Set<String>,
+        actual: Set<String>,
+        debuggable: Boolean = false,
+    ): Verdict = compare(
         expected = expected.mapNotNull { normaliseFingerprint(it) }.toSet(),
         actual = actual.mapNotNull { normaliseFingerprint(it) }.toSet(),
+        debuggable = debuggable,
     )
 
     /**
@@ -112,7 +151,11 @@ object AppSignature {
      * comment, a stray line from the output, a typo. An unparseable entry cannot
      * match anything, so keeping it would only risk a false `OTHER`.
      */
-    private fun compare(expected: Set<String>, actual: Set<String>): Verdict = when {
+    private fun compare(
+        expected: Set<String>,
+        actual: Set<String>,
+        debuggable: Boolean,
+    ): Verdict = when {
         // Nothing to compare against. Not a pass and not a failure: the project
         // has not recorded its key, so the answer is not knowable here.
         expected.isEmpty() -> Verdict.UNKNOWN
@@ -124,8 +167,15 @@ object AppSignature {
 
         // Any match counts. A build signed with more than one key is normal -- a
         // key rotation, or an app signed for more than one distribution -- and
-        // requiring every fingerprint to match would call those tampered.
+        // requiring every fingerprint to match would call those tampered. Checked
+        // before the debug flag so a build that matches is the project's build
+        // however it was produced.
         actual.any { it in expected } -> Verdict.PUBLISHED
+
+        // A debug installation that does not match is the ordinary case, not a
+        // finding: it is signed with the debug key, which is in no repository and
+        // in every developer's home directory.
+        debuggable -> Verdict.DEVELOPMENT
 
         else -> Verdict.OTHER(actual)
     }
@@ -154,12 +204,21 @@ object AppSignature {
         data object PUBLISHED : Verdict
 
         /**
-         * Signed by something else.
+         * Signed by something else -- unless this is a debug installation, which is
+         * its own verdict [DEVELOPMENT] precisely so it cannot reach this one.
          *
          * The fingerprints travel with it so the user can compare them with the
          * published ones, rather than being told only that something is wrong.
          */
         data class OTHER(val actual: Set<String>) : Verdict
+
+        /**
+         * A debug installation, which is not expected to carry the release key.
+         *
+         * This is the ordinary state of every build installed from a development
+         * machine, and it is reported as what it is rather than as a mismatch.
+         */
+        data object DEVELOPMENT : Verdict
 
         /**
          * Not knowable here: either the project has not recorded its key, or the

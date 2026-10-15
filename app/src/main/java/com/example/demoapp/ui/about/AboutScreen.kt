@@ -63,13 +63,12 @@ fun AboutScreen(
     // is handed, and a platform call inside it would not be.
     val signatureVerdict = remember { AppSignature.verdict(context) }
     val signatures = remember { AppSignature.fingerprints(context) }
-    val signedByOther = remember { signatureVerdict is AppSignature.Verdict.OTHER }
 
     AboutContent(
         state = state,
         onEraseRequested = viewModel::requestErase,
         signatures = signatures,
-        signedByOther = signedByOther,
+        signatureVerdict = signatureVerdict,
         onEraseConfirmed = viewModel::confirmErase,
         onEraseCancelled = viewModel::cancelErase,
         onDismissReport = viewModel::dismissReport,
@@ -108,8 +107,14 @@ internal fun AboutContent(
     onEraseRequested: () -> Unit,
     /** The fingerprints this copy is actually signed with. */
     signatures: Set<String>,
-    /** True when they are not the project's. */
-    signedByOther: Boolean,
+    /**
+     * What this copy's signature says, or [AppSignature.Verdict.UNKNOWN].
+     *
+     * The verdict rather than a flag, because three of the four answers are not
+     * "wrong" and each has its own sentence: a matching build, a debug build that was
+     * never signed with the release key, and a device that would not report.
+     */
+    signatureVerdict: AppSignature.Verdict,
     onEraseConfirmed: () -> Unit,
     onShareDiagnostics: () -> Unit,
     /** Writes over the app's free space. Slow, and the cost is on the screen. */
@@ -148,9 +153,9 @@ internal fun AboutContent(
         // fact they have to go looking for is one they will not find.
         //
         // The fingerprints are selectable and in the same monospace the code blocks
-        // use, because the comparison is done by a person against another string
-        // rather than by the app -- until there is a release key, there is nothing
-        // here to compare against.
+        // use. The app compares them itself; the text stays selectable because the
+        // comparison that matters is one a person can also check against a published
+        // fingerprint, without trusting this screen's verdict.
         Column(Modifier.padding(16.dp)) {
             Text(
                 stringResource(R.string.about_signature_title),
@@ -185,14 +190,19 @@ internal fun AboutContent(
             }
 
             Spacer(Modifier.height(8.dp))
-            // A statement of the current limit, not a warning. The project has not
-            // recorded a release key yet, so "is this the project's build" is not a
-            // question this app can answer, and saying so plainly beats a green tick
-            // nobody has earned.
+            // Four states rather than a warning and a fallback, because three of them
+            // are not "wrong". A matching build has earned the sentence; a debug
+            // build was never signed with the release key and saying so is the whole
+            // point of separating it; a device that reports no signature is not a
+            // finding.
             Text(
                 stringResource(
-                    if (signedByOther) R.string.about_signature_other
-                    else R.string.about_signature_unknown,
+                    when (signatureVerdict) {
+                        is AppSignature.Verdict.OTHER -> R.string.about_signature_other
+                        AppSignature.Verdict.DEVELOPMENT -> R.string.about_signature_development
+                        AppSignature.Verdict.PUBLISHED -> R.string.about_signature_published
+                        AppSignature.Verdict.UNKNOWN -> R.string.about_signature_unknown
+                    },
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

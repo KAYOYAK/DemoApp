@@ -1,8 +1,66 @@
+// `java.util.Properties` has to be imported: inside a build script `java` names the
+// Java plugin's extension, so the fully qualified form does not resolve.
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
 }
+
+// Release signing, when a key is supplied.
+//
+// The release build type has no signing config of its own, and for most of this
+// project's life that was the whole story: `assembleRelease` produced an unsigned APK
+// and the release workflow published a debug build instead. The release workflow now
+// passes a key with `-Pandroid.injected.signing.*`, which is the form AGP documents
+// for an injected signing config -- and which, on its own, does not sign a release
+// build here. Nothing read those properties, so a run with every secret configured
+// would have attached an APK labelled "signed release" that `apksigner` reports as
+// unsigned: the release notes making a claim about provenance that the artefact does
+// not support, which is the one thing this project's tamper check exists to prevent.
+//
+// Three callers, so three spellings of the same four values: the injected Gradle
+// properties (CI, and Android Studio when it builds a signed APK), the
+// `RELEASE_KEYSTORE_*` environment variables (a shell that would rather not put a
+// path in the process list), and `keystore.properties` beside this module (a
+// developer's own key, which is in .gitignore and never in the repository).
+//
+// Absent every one of them the release build stays unsigned rather than failing.
+// That is deliberate: the workflow's fallback branch decides what to do about it, and
+// a build that cannot be signed is still a build worth being able to compile.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+fun signingValue(injected: String, environment: String, local: String): String? =
+    (project.findProperty(injected) as String?)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(environment)?.takeIf { it.isNotBlank() }
+        ?: keystoreProperties.getProperty(local)?.takeIf { it.isNotBlank() }
+
+val releaseStoreFile = signingValue(
+    injected = "android.injected.signing.store.file",
+    environment = "RELEASE_KEYSTORE_FILE",
+    local = "storeFile",
+)
+val releaseStorePassword = signingValue(
+    injected = "android.injected.signing.store.password",
+    environment = "RELEASE_KEYSTORE_PASSWORD",
+    local = "storePassword",
+)
+val releaseKeyAlias = signingValue(
+    injected = "android.injected.signing.key.alias",
+    environment = "RELEASE_KEY_ALIAS",
+    local = "keyAlias",
+)
+val releaseKeyPassword = signingValue(
+    injected = "android.injected.signing.key.password",
+    environment = "RELEASE_KEY_PASSWORD",
+    local = "keyPassword",
+)
 
 android {
     namespace = "com.example.demoapp"
@@ -56,6 +114,26 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+
+            // Only when a key is present, so an unsigned build stays possible. The
+            // store file is checked rather than assumed: a path that does not exist is a
+            // configuration mistake, and AGP's own failure names the file, which is a
+            // better message than an APK that silently comes out unsigned.
+            if (releaseStoreFile != null && releaseStorePassword != null &&
+                releaseKeyAlias != null && releaseKeyPassword != null
+            ) {
+                val store = file(releaseStoreFile)
+                require(store.exists()) {
+                    "Release signing was configured with '$releaseStoreFile', which does not exist."
+                }
+                signingConfigs.create("release") {
+                    storeFile = store
+                    storePassword = releaseStorePassword
+                    keyAlias = releaseKeyAlias
+                    keyPassword = releaseKeyPassword
+                }
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
