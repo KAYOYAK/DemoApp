@@ -165,8 +165,10 @@ function Invoke-GradleQuery {
         Configuration to resolve, for example `releaseRuntimeClasspath`.
 
         .PARAMETER TimeoutSeconds
-        Wall-clock budget per attempt. Defaults to 180, which is roughly ten times
-        what a warm daemon needs on this machine.
+        Wall-clock budget per attempt. Defaults to 90 seconds: long enough for a
+        cold daemon to resolve this configuration on this machine, short enough
+        that a daemon which has stopped answering is caught inside a pipeline
+        rather than after one gives up waiting for it.
 
         .PARAMETER Arguments
         Wrapper arguments. Defaults to the dependency report for `-Configuration`. A
@@ -209,6 +211,11 @@ function Invoke-GradleQuery {
             Write-Host '  the Gradle daemon did not answer; restarting it and asking once more ...' -ForegroundColor DarkYellow
             Clear-GradleDaemonState $Root
         }
+
+        # Printed before the wait, not after it: a pipeline that is reading nothing
+        # for two minutes looks the same whether Gradle is working or wedged, and
+        # that is the failure this file exists to end.
+        Write-Host ("  asking Gradle for {0} (attempt {1} of 2, up to {2}s) ..." -f $Configuration, $attempt, $TimeoutSeconds)
 
         # Both streams redirected, to two different files: `Start-Process` refuses
         # to send two streams to one path. The redirection is not cosmetic either --
