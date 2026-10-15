@@ -38,6 +38,12 @@ lands, not reviewed after.
 - Custom or bespoke licences are treated as denied until read and recorded.
 - Attribution obligations are discharged: `NOTICE` and
   `THIRD_PARTY_LICENSES.md` ship with the project and stay accurate.
+- The rule above governs a dependency's own licence, read from the classpath. A notice
+  packed *inside* an artifact is a different question: `litertlm-android` is Apache-2.0,
+  and the notice it carries also describes the publisher's build environment. Those
+  findings are read, measured and recorded in `compliance/embedded-notices.json`, and
+  when one of them is copyleft the answer is to ship the notice with the artefact rather
+  than to leave it where only this repository can see it.
 - The project says plainly what it is not: `DISCLAIMER.md` states the absence of
   warranty, that the output is the model's rather than the author's, and that no
   one can moderate it. `docs/legal/TRADEMARKS-AND-CLAIMS.md` states that no model
