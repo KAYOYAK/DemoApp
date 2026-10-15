@@ -186,14 +186,33 @@ try {
     Write-Host ''
     $passed = $Runs - $failures.Count
     Write-Host ("{0} runs: {1} executed and passed, {2} did not pass" -f $Runs, $passed, $failures.Count)
+
+    # Written whether or not anything failed. The first version wrote the summary only
+    # on failure, so a clean batch left an empty directory -- and an empty directory is
+    # the same evidence as a batch that never ran, which is the defect this script was
+    # built to find in other tools. The per-run logs stay failure-only on purpose: a
+    # passing run's console output is not worth a hundred and fifty files.
+    $summary = Join-Path $outRoot 'summary.txt'
+    $lines = @(
+        ("{0} runs: {1} executed and passed, {2} did not pass" -f $Runs, $passed, $failures.Count)
+        ("class filter: {0}" -f $TestClass)
+        ("finished: {0}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz'))
+        ("machine: {0}" -f $env:COMPUTERNAME)
+    )
     if ($failures.Count) {
-        $summary = Join-Path $outRoot 'summary.txt'
-        $failures | Format-Table -AutoSize | Out-String -Width 400 | Tee-Object -FilePath $summary
+        $lines += ($failures | Format-Table -AutoSize | Out-String -Width 400).TrimEnd()
+    }
+    else {
+        $lines += 'No failure in this batch. That is a result about this machine, not about the code.'
+    }
+    ($lines -join "`n") | Out-File -Encoding utf8 $summary
+    Write-Host "summary: $summary"
+
+    if ($failures.Count) {
         # A grouped view, because the whole question is whether the failure moves.
         $failures | Group-Object Test | ForEach-Object {
             "  {0,3}x  {1}" -f $_.Count, $_.Name
         }
-        Write-Host "summary: $summary"
         exit 1
     }
     Write-Host 'No failure in this batch. That is a result about this machine, not about the code.'
