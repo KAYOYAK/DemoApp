@@ -1579,6 +1579,16 @@ nothing). All four now name the content they are waiting for. This is the same l
 counter that never moved, one level down: **a wait whose predicate can be satisfied by the
 wrong thing is not a wait**, and it took a hundred and fifty runs and a stack trace to see it.
 
+**A fourth batch, at the widened window, caught nothing.** `build-logs\stress-b1e`:
+`150 runs: 150 executed and passed, 0 did not pass` — against `3 in 40`, `1 in 60` and `1 in 150`
+as the window grew from 385 ms to 785 ms to 3,185 ms. The script prints its own caveat and it is the
+right one: *No failure in this batch. That is a result about this machine, not about the code.* Zero
+in a hundred and fifty bounds the rate at about two percent (three over n) rather than at zero, and
+`lastMoveRefusal` never fired in these runs, so the reason the file system gives is still
+unobserved. What the batch buys is a smaller guess, not a closed question: the flake is closed by an
+occurrence that names its reason, or by a rate low enough that CI never sees it — and only the
+second of those is something a batch can show.
+
 ## What the lock and the read-aloud path answer on a device
 
 Two seams cannot be reached from a JVM test: what `BiometricManager.canAuthenticate` says on the
