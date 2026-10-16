@@ -166,3 +166,15 @@ its constraint quoted, not just deleted. An item found to be unnecessary says so
 
 When a row changes, the reason goes in the same change. A roadmap edited to match
 what happened is a record; one edited to look good is not.
+
+**What "nothing left" means, and what it does not.** Three kinds of work can be
+left, and only two of them are in this file. A row in **not started** or **blocked**
+is recorded: this file names what it waits for, and that is answerable by reading.
+Work no row records can still exist — a defect nothing has run against yet, a
+question nobody has asked — and no reading of this file will show it. So a claim
+that there is nothing left is a claim about the rows: every recorded item is either
+done or waits on something named here. Anything stronger is a promise about the
+unknown, and this project has already broken that promise twice in one afternoon
+(2026-10-16): a "nothing left" was followed by a reading that found a channel the
+engine never read, and the next one by a reading that found a pipeline no test had
+ever driven end to end. Say which claim is being made.
