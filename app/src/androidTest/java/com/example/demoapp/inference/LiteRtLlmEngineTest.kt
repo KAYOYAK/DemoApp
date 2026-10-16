@@ -2,7 +2,6 @@ package com.example.demoapp.inference
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.example.demoapp.model.ModelCatalogue
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -20,103 +19,23 @@ import java.io.File
  * along with it.
  *
  * The model is not in the repository (see docs/PRINCIPLES.md -- weights are
- * never bundled), so the test finds it in one of two places, in this order:
- *
- *  1. `files/models/` inside the app, where the application's own download puts
- *     it. This is the faithful path and the one to use when it is available:
- *
- *         adb push Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm /data/local/tmp/
- *         adb shell "run-as com.example.demoapp sh -c \
- *           'cat /data/local/tmp/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm \
- *            > files/models/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm'"
- *
- *  2. Any `.litertlm` in `/data/local/tmp/models`, which is for a machine that
- *     has a variant of the model but not that exact file. The engine still
- *     loads real weights and generates real tokens; what is not exercised is the
- *     catalogue's file. The log says which one was used.
- *
- * With neither present the model tests report SKIPPED and pass, so a run without
- * a 344 MB download is not broken. Read the log rather than trusting a green
+ * never bundled), so [TestModel.orNull] finds one on the device or says why it
+ * cannot; with no model these tests report SKIPPED and pass, so a run without a
+ * 329 MB download is not broken. Read the log rather than trusting a green
  * result: a skipped run proves nothing.
  *
  * **This file was written but never compiled or run.** It named `smollm2-360m`,
  * which left the catalogue when the app narrowed to Chinese models, and the run
  * that finally happened reported `Model 'smollm2-360m' is no longer in the
- * catalogue` three times. The lesson is in [modelOrNull] rather than in a
- * resolution to be more careful: a test that cannot run must SAY it did not run,
- * and this one asserted its way past the skip.
+ * catalogue` three times. The lesson lives in [TestModel.orNull] rather than in
+ * a resolution to be more careful: a test that cannot run must SAY it did not
+ * run, and this one asserted its way past the skip.
  */
 @RunWith(AndroidJUnit4::class)
 class LiteRtLlmEngineTest {
 
-    /** Whichever catalogue entry the tests exercise: the first, and the smallest. */
-    private val MODEL_ID = "qwen3-0.6b-int4"
-
-    /** Where the model went the last time somebody set this machine up. */
-    private val handDroppedDir = File("/data/local/tmp/models")
-
-    /**
-     * The model this run can actually exercise, with the name to log it under.
-     *
-     * The catalogue entry is the point: it is the file the application itself
-     * would download, in the directory the application keeps it in, and a test
-     * that used something else would be testing a different program. It is also
-     * 344 MB fetched over the network, so a run on a machine that never did that
-     * download would answer no questions at all.
-     *
-     * Hence the fallback. A variant of the same model, left where somebody put it
-     * by hand, still exercises the thing under test -- the runtime loading weights
-     * and generating tokens -- while not exercising the catalogue's exact file.
-     * The return value carries `catalogueFile = false` so the log says which of
-     * the two happened rather than leaving it to be inferred from the name.
-     *
-     * Returns null when neither is there, and then every model test skips with a
-     * printed reason. Note that this cannot throw for a stale id: the previous
-     * version did, which turned "nothing to test" into a red build.
-     */
-    private fun modelOrNull(): ModelUnderTest? {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val container = (context.applicationContext as com.example.demoapp.DemoApplication).container
-
-        val descriptor = ModelCatalogue.byId(MODEL_ID)
-        if (descriptor == null) {
-            println("LITERT-ENGINE: SKIPPED - '$MODEL_ID' is not in the catalogue any more")
-            return null
-        }
-
-        val catalogue = container.modelStore.modelFile(descriptor)
-        if (catalogue.isFile && catalogue.length() > 0L) {
-            return ModelUnderTest(MODEL_ID, descriptor.displayName, catalogue, catalogueFile = true)
-        }
-
-        val handDropped =
-            handDroppedDir.listFiles()
-                ?.filter { it.isFile && it.length() > 0L && it.name.endsWith(".litertlm") }
-                ?.sortedBy { it.length() }
-                ?.firstOrNull()
-        if (handDropped != null) {
-            println(
-                "LITERT-ENGINE: NOTE - ${descriptor.fileName} is not installed; " +
-                    "falling back to the hand-dropped ${handDropped.name} " +
-                    "(${handDropped.length()} bytes). The engine is exercised; " +
-                    "the catalogue's own file is not.",
-            )
-            return ModelUnderTest(handDropped.name, handDropped.name, handDropped, catalogueFile = false)
-        }
-
-        println(
-            "LITERT-ENGINE: SKIPPED - neither ${descriptor.fileName} in the app's " +
-                "files/models, nor any .litertlm in $handDroppedDir",
-        )
-        return null
-    }
-
-    private data class ModelUnderTest(
-        val id: String,
-        val displayName: String,
-        val file: File,
-        val catalogueFile: Boolean,
-    )
+    /** The prefix every line this test prints carries, so a batch's log names it. */
+    private val log = "LITERT-ENGINE"
 
     private fun newEngine(): LiteRtLlmEngine {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -140,7 +59,7 @@ class LiteRtLlmEngineTest {
      */
     @Test
     fun theBackendItReportsReadyIsOneThatCanActuallyGenerate() = runBlocking {
-        val underTest = modelOrNull()
+        val underTest = TestModel.orNull(log)
         if (underTest == null) {
             println("LITERT-ENGINE: SKIPPED (backend readiness) - no model on this device")
             return@runBlocking
@@ -182,7 +101,7 @@ class LiteRtLlmEngineTest {
 
     @Test
     fun loadsModelGeneratesAndStreams() = runBlocking {
-        val underTest = modelOrNull()
+        val underTest = TestModel.orNull(log)
         if (underTest == null) {
             println("LITERT-ENGINE: SKIPPED - no model on this device")
             return@runBlocking
@@ -220,10 +139,19 @@ class LiteRtLlmEngineTest {
         failures.forEach { println("LITERT-ENGINE: FAILED -> ${it.error}") }
 
         assertTrue("generation must not report failure", failures.isEmpty())
-        assertTrue("generation produced no tokens", tokens.isNotEmpty())
+        assertTrue(
+            "generation produced no tokens (model=${underTest.id}, file=${underTest.file.name}, " +
+                "backend=$backendUsed): the engine loaded real weights and the stream ended cleanly with " +
+                "nothing in it, which is a fact about this model on this device and not about the stream",
+            tokens.isNotEmpty(),
+        )
 
         val completed = done ?: throw AssertionError("no Done event; the stream ended without completing")
-        assertTrue("Done carried no text", completed.fullText.isNotBlank())
+        assertTrue(
+            "Done carried no text (model=${underTest.id}, file=${underTest.file.name}): " +
+                "the answer channel was empty for the whole generation",
+            completed.fullText.isNotBlank(),
+        )
 
         // The contract of the delta logic: concatenating every Token must
         // reproduce exactly what Done reports. If the two disagree, the UI
@@ -270,7 +198,7 @@ class LiteRtLlmEngineTest {
      */
     @Test
     fun reportsWhetherGenerationActuallyStreams() = runBlocking {
-        val underTest = modelOrNull()
+        val underTest = TestModel.orNull(log)
         if (underTest == null) {
             println("LITERT-ENGINE: SKIPPED (streams probe) - no model on this device")
             return@runBlocking

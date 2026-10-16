@@ -1687,5 +1687,106 @@ sound is judged by listening. That distinction is the test's own KDoc, because a
 reports an error and the app clears its state exactly as designed — a green test over a silent
 phone is the failure mode a listener catches and a runner does not.
 
+## What the app's own downloader does on a device
+
+The download was another of the four paths in `docs/ROADMAP.md` that only a device can answer for,
+and the one the app cannot work without: the engine tests load weights somebody pushed, while a
+user's first run goes through `ModelDownloader`. On 2026-10-16 it ran on `emulator-5554` twice, in
+the app's own UI rather than under test.
+
+The first run was in the **release install** of v1.0.1 — the published artefact, put on the device
+with `adb install -r` over the v1.0 install, then driven by hand: the list offered Qwen3 0.6B 量化版
+(329 MB), the tap downloaded it at 15–18 MB/s, and the row ended at `已安装 · 329 MB`, with
+设置 → 这台设备上的占用 reading `模型 329 MB`. That install was then removed to make room for the
+debug pair the instrumented tests need, and its app data went with it.
+
+The second run was in the **debug install**, and this is the one the rest of this document depends
+on: it is what put the catalogue's own file where `TestModel.orNull` looks for it.
+
+```
+$ adb shell run-as com.example.demoapp ls -l files/models/
+-rw------- 1 u0_a230 u0_a230 344671744 2026-10-16 04:09 Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm
+```
+
+344,671,744 bytes, the catalogue's file name, in the directory the application keeps it in. The
+instrumented runs that follow therefore exercise the file a user would have, not a variant pushed by
+hand — which is the difference the fallback in `TestModel` exists to keep visible in its log.
+
+What a device run cannot show is the network the user is on: these two were an emulator's NAT
+through a desktop connection, and the failure the downloader was built around — a digest that did
+not match, in the section above — is a server-side fact rather than a device one.
+
+## What the sampler comparison measured, and what it could not
+
+`docs/ROADMAP.md` asked whether the `topK` default of 20 is any good. It had been lowered from 40 on
+the publisher's recommendation, and nothing in this project had checked it.
+`SamplerComparisonTest` (`app/src/androidTest/java/com/example/demoapp/inference/SamplerComparisonTest.kt`)
+is that check: the same prompt the app's own benchmark uses (「用一句话说明什么是光合作用。」), the engine
+loaded once per setting, `temperature = 0.8` and three seeds per setting, both settings in one run so
+they share a machine and a warmed cache. The benchmark cannot answer the question itself — it runs at
+`temperature = 0.0`, where decoding is greedy and neither `topK` nor `topP` participates, deliberately
+and correctly for what it measures — so this test runs the sampler the chat actually uses. Each sample
+records the answer, the reasoning channel, the token count, the time and an eight-character repetition
+ratio, and the test asserts that the samples within a setting are not all identical: a seed that never
+reached the decoder fails rather than reading as a result.
+
+**The first run measured nothing.** It asked for the catalogue's 4-bit Qwen3 — the model a first-run
+user downloads — and got six samples of zero tokens, in about a minute, with the reasoning channel
+empty as well. The engine's own test fails the same way on the same file on this machine:
+
+```
+java.lang.AssertionError: generation produced no tokens …
+  at com.example.demoapp.inference.LiteRtLlmEngineTest.loadsModelGeneratesAndStreams(LiteRtLlmEngineTest.kt:142)
+```
+
+That message now carries the model id, the file name and the backend, because the first version read
+`generation produced no tokens` and nothing else, which leaves a reader guessing which model was
+silent. What the silence means is not established here: the file is the one the downloader fetches and
+verifies, `files/models/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm`, 344,671,744 bytes, and the engine
+reports no error — it loads it and generates nothing. It is a property of that model on this runtime,
+and it is why the comparison names its model explicitly instead of taking the catalogue's.
+
+**The second run had a model that answers.** `SAMPLER: NOTE — using the named model
+SmolLM2_360M_instruct.litertlm (373,719,040 bytes, from /data/user/0/com.example.demoapp/files/models);
+the catalogue entry 'qwen3-0.6b-int4' is not what this run measures.` Six samples, 304.6 s:
+
+| setting | seed | tokens | time (ms) | tok/s | repeat ratio | characters |
+| --- | --- | --- | --- | --- | --- | --- |
+| `topK=40` | 1 | 128 | 18,983 | 6.7 | 0.118 | 269 |
+| `topK=40` | 2 | 128 | 16,296 | 7.9 | 0.036 | 145 |
+| `topK=40` | 3 | 92 | 13,843 | 6.6 | 0.047 | 113 |
+| `topK=20` | 1 | 128 | 22,530 | 5.7 | 0.000 | 151 |
+| `topK=20` | 2 | 128 | 21,322 | 6.0 | 0.021 | 153 |
+| `topK=20` | 3 | 128 | 17,849 | 7.2 | 0.000 | 154 |
+
+Medians: `topK=40` 0.047 repeat, 145 characters, 6.74 tok/s; `topK=20` 0.000 repeat, 153 characters,
+6.00 tok/s. Three distinct texts in both settings. So the tighter cut repeated less on this model and
+its speed is inside the spread — the direction the publisher's recommendation claims, measured on
+three samples of one prompt.
+
+Two things about the second run are worth keeping. The answers came back partly as byte-fallback
+mojibake (`在 Python 中，å¦Ĥ果…`) — a 360M English-first model being asked a Chinese question, which is a
+property of the model and of the prompt, not of the sampler, and is the visible reason the app's
+catalogue narrowed to models that handle the language it is written in. And the first version of this
+test recorded only the answer, so a reasoning-heavy model that emits its thoughts in the reasoning
+channel would have measured as an empty string; the sample now carries both channels and the printed
+line says how many characters each held.
+
+**The runner lost a passing run's numbers, which is how the instrument was found to be the problem.**
+`scripts/run-instrumented-test.ps1` kept the instrumented output only when a run failed, and the tests
+print with `println`, which does not travel on the instrumented stream at all — it lands in logcat
+under `System.out`. A green measurement therefore printed its numbers into logcat, where a caller
+capturing this script's stdout could not see them, while the same run's failure text was the thing
+that survived. The numbers above were recovered by hand from `adb logcat`. The script now clears the
+buffer before the run and writes both sources to `build-logs\instrumented-output.txt`, so the evidence
+of a passing run is a file rather than a memory of one.
+
+**What this does not establish.** The machine is `emulator-5554` on a desktop CPU, not a phone; the
+model is a 360M one the catalogue no longer carries; three samples of one prompt is a sign, not a
+default. The row in the roadmap that asks whether the app's own default is right is therefore still
+open, and now says what is missing rather than that nothing had been tried: the same comparison, on a
+phone, on the model the app ships.
+
+
 
 

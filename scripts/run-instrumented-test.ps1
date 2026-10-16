@@ -160,8 +160,40 @@ if ($present -match [regex]::Escape($modelName)) {
 # ------------------------------------------------------------------ run ---
 Write-Host '  [5/5] running ...' -ForegroundColor DarkGray
 Write-Host ''
+# The tests print where their numbers go, and that is not the stream below:
+# `println` from an instrumented test lands in logcat under `System.out`, which
+# is why a run that measured something could still leave nothing behind. The
+# buffer is cleared here so what is read back afterwards belongs to this run.
+[void](Invoke-Adb @('shell', 'logcat', '-c'))
 $result = & $adb -s $Serial shell am instrument -w -e class $Class "$testPackage/$runner" 2>&1 | Out-String
 Write-Host $result
+
+# The instrumented output is the evidence, and a passing run was the one that hid
+# it: the sampler comparison prints its measurements and nothing else, and
+# capturing this script's stdout lost them, so a green run's numbers were gone
+# while the same run's failure text survived. Two sources are written to one
+# file: the stream above, and the lines the tests printed, read back from logcat.
+# Those follow one convention (`SAMPLER:`, `LITERT-ENGINE:`, `DEVICE-AUTH:`,
+# `SPEECH:`), so the rule is a prefixed word rather than a list of names.
+$logcat = & $adb -s $Serial logcat -d -v brief 2>&1 | Out-String
+$printed = $logcat -split "`r?`n" |
+    ForEach-Object {
+        # `-v brief` writes `I/System.out( 1234): message`; the tag is stripped so
+        # the line kept is the one the test wrote.
+        $m = [regex]::Match($_, '^[VDIWEF]/(\S+)\s*\(\s*\d+\):\s(.*)$')
+        if ($m.Success) { $m.Groups[2].Value } else { $_ }
+    } |
+    Where-Object { $_ -match '^[A-Z][A-Z0-9_-]*: ' -and $_ -notmatch '^(INSTRUMENTATION_|Time:)' }
+$instrumentedLog = Join-Path $projectDir 'build-logs\instrumented-output.txt'
+New-Item -ItemType Directory -Force -Path (Split-Path $instrumentedLog) | Out-Null
+$parts = @($result.TrimEnd())
+if ($printed) { $parts += @('', '--- what the test printed (logcat) ---') + $printed }
+$parts -join "`n" | Set-Content -Encoding utf8 $instrumentedLog
+if ($printed) {
+    Write-Host '--- what the test printed ---' -ForegroundColor DarkGray
+    $printed | ForEach-Object { Write-Host "    $_" }
+}
+Write-Host ("        full instrumented output: {0}" -f $instrumentedLog) -ForegroundColor DarkGray
 
 if ($result -match 'FAILURES!!!|INSTRUMENTATION_FAILED') {
     Write-Host 'RESULT: FAILED' -ForegroundColor Red
