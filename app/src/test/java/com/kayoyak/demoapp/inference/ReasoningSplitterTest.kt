@@ -146,6 +146,20 @@ class ReasoningSplitterTest {
     }
 
     @Test
+    fun `channel text is recorded as it is, without being scanned`() {
+        // The runtime separates a channel itself, so this text arrives already known to
+        // be reasoning -- including the case where it looks like a marker, which would
+        // otherwise be held back as a partial one and released at the end.
+        val splitter = ReasoningSplitter()
+        splitter.record("<think>")
+        splitter.record("half a marker")
+
+        assertEquals("<think>half a marker", splitter.trace)
+        assertTrue("no answer arrived", splitter.reasoningWithoutAnswer)
+        assertEquals("nothing was held back", "", splitter.finish())
+    }
+
+    @Test
     fun `nothing is lost when there is no marker`() {
         // The other property: a splitter that holds back text must give all of it
         // back when no marker ever arrives. Losing a character here would be a

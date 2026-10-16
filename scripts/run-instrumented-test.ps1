@@ -28,6 +28,11 @@
 .PARAMETER Class
     Fully qualified test class. Defaults to the inference engine test.
 
+.PARAMETER ModelFile
+    Name of the model file the tests should use, passed to the instrumentation as
+    `demoapp.modelFile`. Left unset the tests choose their own; set, it is how two
+    models already on the device are compared without an edit and a rebuild.
+
 .PARAMETER Serial
     Device serial. Defaults to emulator-5554.
 
@@ -38,11 +43,18 @@
 .EXAMPLE
     .\run-instrumented-test.ps1 -Class com.kayoyak.demoapp.ui.main.MainScreenTest
     Run a different test class against the same install.
+
+.EXAMPLE
+    .\run-instrumented-test.ps1 -ModelFile Qwen3-0.6B.litertlm -Class `
+      com.kayoyak.demoapp.inference.SamplerComparisonTest
+    Measure the model named on the command line, not the one the test was built
+    around.
 #>
 [CmdletBinding()]
 param(
     [string] $ModelPath = 'D:\litert-test\SmolLM2_360M_instruct.litertlm',
     [string] $Class     = 'com.kayoyak.demoapp.inference.LiteRtLlmEngineTest',
+    [string] $ModelFile,
     [string] $Serial    = 'emulator-5554'
 )
 
@@ -165,7 +177,13 @@ Write-Host ''
 # is why a run that measured something could still leave nothing behind. The
 # buffer is cleared here so what is read back afterwards belongs to this run.
 [void](Invoke-Adb @('shell', 'logcat', '-c'))
-$result = & $adb -s $Serial shell am instrument -w -e class $Class "$testPackage/$runner" 2>&1 | Out-String
+$instrumentArgs = @('shell', 'am', 'instrument', '-w', '-e', 'class', $Class)
+if ($ModelFile) {
+    Write-Host "  model  : $ModelFile (named by this run)" -ForegroundColor DarkGray
+    $instrumentArgs += @('-e', 'demoapp.modelFile', $ModelFile)
+}
+$instrumentArgs += "$testPackage/$runner"
+$result = & $adb -s $Serial @instrumentArgs 2>&1 | Out-String
 Write-Host $result
 
 # The instrumented output is the evidence, and a passing run was the one that hid

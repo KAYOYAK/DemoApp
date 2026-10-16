@@ -76,6 +76,26 @@ internal class ReplyAssembler {
     }
 
     /**
+     * Records text the runtime routed into a named channel.
+     *
+     * Not the answer, and never appended to it: a channel is the runtime saying "this is
+     * not the reply". The app has one place for text that is not the answer -- the
+     * reasoning trace, which the screen shows above the answer and keeps closed by
+     * default -- so that is where this goes, whatever the channel is called.
+     *
+     * Measured rather than assumed. Qwen3's template declares a `thought` channel, and
+     * on this project's emulator the catalogue's own 4-bit Qwen3 produced 128 tokens per
+     * sample that were all channel text: `Message.contents` came back empty, the app read
+     * only that, and six samples in a row looked like a model that generates nothing.
+     * See [ThinkingChannelTest].
+     */
+    fun addChannelText(text: String) {
+        if (text.isEmpty()) return
+        fragmentCount++
+        splitter.record(text)
+    }
+
+    /**
      * Releases whatever was held back when the stream ends.
      *
      * A reply that finishes on a character which could have been the start of a tag

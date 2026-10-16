@@ -1910,3 +1910,73 @@ instead of the directory holding it, it printed `No new embedded notices` and ex
 promised and nothing performed. The parameter is removed rather than implemented, because resolving the
 classpath is the check this gate exists to be; a caller that still passes `-BuildDir` now gets PowerShell's
 parameter-binding error and a non-zero exit, which is the loud refusal the rest of this section is about.
+
+## What the model the app ships was doing instead of answering
+
+The catalogue's own entry — `qwen3-0.6b-int4`, 344,671,744 bytes, the file a first-run user downloads — loaded
+cleanly and then answered nothing. `SamplerComparisonTest` recorded six samples of zero tokens in about 31
+seconds each, with the reasoning channel empty as well, and `LiteRtLlmEngineTest` failed on the same file with
+`generation produced no tokens`. The reading taken at the time was that the model was silent. The model was
+talking the whole time, on a channel the app does not read.
+
+Three things were ruled out before the file was blamed. The engine works: the same classes answer on
+`SmolLM2_360M_instruct.litertlm` on the same emulator and `LiteRtLlmEngineTest` passes there. The backend is
+probed by *running* it — one token through a throwaway conversation, which is what makes an unusable GPU
+delegate fail at load instead of on the user's first message — and this file reports CPU with a successful
+probe. And the file loads: the runtime maps it, reports it, and streams from it.
+
+What made the difference visible is `ThinkingChannelTest`
+(`app/src/androidTest/java/com/kayoyak/demoapp/inference/ThinkingChannelTest.kt`), which exists because the
+harness had no way to name a model on the command line. `TestModel` now reads an instrumentation argument
+(`demoapp.modelFile`), `scripts/run-instrumented-test.ps1` gained `-ModelFile` and passes it, so the same class
+can be pointed at either Qwen build or at SmolLM2 without editing a test and rebuilding. Its first test runs
+through the app's own engine and prints what reaches the assembler; its second prints what the runtime hands
+back per message, with thinking at the model's default and with it off.
+
+Measured 2026-10-16 on `emulator-5554`, both Qwen builds, one prompt (count from one to ten, separated by
+spaces):
+
+| Model file | Setting | Messages | Answer | Channel text | Time |
+| --- | --- | --- | --- | --- | --- |
+| `Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm` (344 MB, the catalogue's) | model default | 254 | 0 characters | 951 characters of `thought` | 57.4 s |
+| the same | thinking off | 39 | 71 characters, correct | none | 9.0 s |
+| `Qwen3-0.6B.litertlm` (614 MB, full precision) | model default | 253 | 19 characters | 833 characters of `thought` | 34.6 s |
+| the same | thinking off | 20 | 58 characters | none | — |
+
+Two defects came out of that, and they are different defects.
+
+**The app read half of what the runtime returns.** A `Message` carries the reply in `contents` and the rest in
+`channels`; `LiteRtLlmEngine.textContent()` read only `contents`, so every character the runtime routed into a
+channel was dropped before anything could see it. Qwen3's template declares a `thought` channel, and with
+thinking on the answer follows the thought — so a whole reply, 254 messages of it, was discarded, which is
+exactly what "the model generates nothing" looks like from outside. `ReplyAssembler.addChannelText` records that
+text in the reasoning trace instead: not the answer, because the runtime said it is not, and not lost either.
+`ReasoningSplitter.record` appends it verbatim rather than scanning it, because text the runtime has already
+separated cannot contain a marker, and a channel ending on the start of one would otherwise be held back until
+the stream ended. The screen already knows how to show this: the trace renders above the answer, closed by
+default, and `ChatGeneration.commitReply` already answers a reply that is *only* a trace with
+`chat_reasoned_only` rather than a stopped spinner.
+
+**Thinking was left at the model's default, and the default spends the whole budget.** Given 256 tokens, the
+catalogue's model used every one of them thinking and never reached an answer; the app's own configuration
+allows 512, and `LiteRtLlmEngineTest` on the same file got nothing out of that either. Asked not to think, the
+same model answered the same prompt correctly in a sixth of the tokens. `LiteRtLlmEngine.configFor` now passes
+`ThinkingConfig(enableThinking = false)` for every conversation the app creates, the load probe included.
+Nothing about the trace UI changes: a model that thinks anyway, or a user's own model whose template carries a
+reasoning block, still reaches the screen through `addChannelText` and the splitter.
+
+**What this does not establish.** One model family, one emulator, one prompt. Thinking off is a measurement
+against the app's own models rather than a claim about thinking models in general — a model that needs to think
+is worse off for it — and the runtime's other route, a bounded `thinkingTokenBudget`, has not been tried. The
+emulator's CPU is not a phone's, so 9 s and 57 s are ratios and not timings.
+
+**And the model answered the question the catalogue was asked to answer.** The comparison the silent file could
+not take part in has now run on it: `SamplerComparisonTest`, its usual prompt (explain photosynthesis in one
+sentence, in Chinese), three seeds per setting at `temperature = 0.8`, `emulator-5554`, 2026-10-16. `topK=40`
+produced three distinct answers of 48, 56 and 38 characters — median repeat ratio 0.000, 2.88 tok/s — and
+`topK=20` three distinct answers of 28, 56 and 35 characters (0.000, 2.69 tok/s). All six are fluent Chinese
+sentences about photosynthesis, which is the part that matters: the model this app ships produces text through
+the app's own engine, where before it produced samples of zero tokens and a failing test. What the numbers say
+about the sampler is narrower than the earlier run's: on this model the two settings are indistinguishable on
+repetition, and the tighter cut writes shorter answers, so the value stays where the publisher's own
+recommendation and the 360M reading put it. A phone is still what would settle which of the two reads better.

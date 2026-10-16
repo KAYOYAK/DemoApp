@@ -16,6 +16,7 @@ import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.Message
 import com.google.ai.edge.litertlm.ModelInfo
 import com.google.ai.edge.litertlm.SamplerConfig
+import com.google.ai.edge.litertlm.ThinkingConfig
 import com.google.ai.edge.litertlm.tool
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -370,6 +371,25 @@ class LiteRtLlmEngine(private val cacheDir: File) : LlmEngine {
             // to remember.
             tools = listOf(tool(activeTools)),
             automaticToolCalling = true,
+            // Thinking is off, and that is a measurement rather than a preference.
+            //
+            // Qwen3's template declares a `thought` channel, so the runtime routes the
+            // model's reasoning there and the answer follows it. Measured on this
+            // project's emulator, 2026-10-16, on the model the catalogue ships
+            // (`qwen3-0.6b-int4`, 344 MB): given 256 tokens of budget it spent every one
+            // of them thinking -- 254 messages, 951 characters of `thought`, no answer at
+            // all, which is what the app had been reporting as a model that generates
+            // nothing. Asked not to think, the same model and prompt answered in 39
+            // messages and 71 characters, in a sixth of the tokens. The full-precision
+            // build behaves the same way at smaller scale: 253 messages for a
+            // 19-character answer against 20 messages for a 58-character one.
+            //
+            // Nothing is lost by this. A model that thinks anyway still reaches the
+            // screen: channel text is recorded by [ReplyAssembler.addChannelText], and
+            // inline `<think>` blocks still go through [ReasoningSplitter]. What is off is
+            // asking the app's own models to think first, which on a phone is the
+            // difference between an answer in nine seconds and no answer in a minute.
+            thinkingConfig = ThinkingConfig(enableThinking = false),
         )
     }
 
@@ -419,6 +439,13 @@ class LiteRtLlmEngine(private val cacheDir: File) : LlmEngine {
                     message = Message.user(prompt),
                     maxOutputToken = config.maxTokens,
                 ).collect { message ->
+                    // Channel text first: a thinking model's channel arrives before the
+                    // answer it is thinking towards, and the trace reads in the order it
+                    // was produced.
+                    for (text in message.channelTexts()) {
+                        assembler.addChannelText(text)
+                    }
+
                     val fragment = message.textContent()
                     // ReplyAssembler documents the fragment contract and is where
                     // the text the previous heuristic dropped is explained.
@@ -586,6 +613,20 @@ private fun Message.textContent(): String =
     contents.contents
         .filterIsInstance<Content.Text>()
         .joinToString(separator = "") { it.text }
+
+/**
+ * The text a message carries in named channels.
+ *
+ * The other half of what the runtime returns, and the half this app did not read. A
+ * model whose template declares a channel -- Qwen3's `thought`, Gemma's channel pair --
+ * has its output routed there by the runtime, and `contents` stays empty. Six samples
+ * of 128 tokens each, all empty on both channels, is what that looked like from the
+ * outside: a model that cannot generate, when the text was arriving all along.
+ *
+ * Measured on this project's emulator, 2026-10-16, on the plain Qwen3-0.6B build and on
+ * the catalogue's own 4-bit one. See `ThinkingChannelTest`.
+ */
+private fun Message.channelTexts(): List<String> = channels.values.filter { it.isNotEmpty() }
 
 /**
  * The runtime's own timing, in this package's terms.

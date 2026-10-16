@@ -94,6 +94,19 @@ internal class ReasoningSplitter(private val markers: List<Marker> = DEFAULT_MAR
         return tail
     }
 
+    /**
+     * Records text the runtime has already separated into a channel.
+     *
+     * Appended straight to the trace, not fed through [accept]: this splitter exists to
+     * *find* the reasoning in text that does not mark it, and text the runtime has put
+     * in a channel needs no finding. Passed through the scanner it would be searched for
+     * markers that cannot be there, and a channel beginning with the start of one would
+     * be held back as a partial marker.
+     */
+    fun record(text: String) {
+        reasoning.append(text)
+    }
+
     private fun scan(text: String) {
         var index = 0
         while (index < text.length) {

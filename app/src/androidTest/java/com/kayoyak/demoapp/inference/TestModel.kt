@@ -12,14 +12,20 @@ import java.io.File
  * never bundled), so every test that needs one starts by asking this object. The
  * order matters:
  *
- *  0. A file the caller names, if it passes [orNull]'s `fileName`. Looked for in
- *     the app's own `files/models/` first, then in `/data/local/tmp/models`, and
- *     it wins over the catalogue entry. A test passes a name when it needs a
- *     model it knows answers on this machine, because the catalogue's own entry
- *     can be installed and silent -- measured on 2026-10-16: the 4-bit Qwen3
- *     below produced no tokens at all on an x86_64 emulator, so the sampler
- *     comparison ran on a model whose text can be read. The log says which file
- *     answered.
+ *  0. A file the run names, if [orNull]'s `fileName` is given or the run passes
+ *     `-e demoapp.modelFile <name>` to the instrumentation. Looked for in the
+ *     app's own `files/models/` first, then in `/data/local/tmp/models`, and it
+ *     wins over the catalogue entry. A run names a file when it needs a model it
+ *     knows answers on this machine, because the catalogue's own entry can be
+ *     installed and silent -- measured on 2026-10-16: the 4-bit Qwen3 below
+ *     produced no tokens at all on an x86_64 emulator, so the sampler comparison
+ *     ran on a model whose text can be read. The log says which file answered.
+ *
+ *     The argument exists because comparing two models means having both on the
+ *     device, and choosing between them must not cost an edit and a rebuild:
+ *     `scripts/run-instrumented-test.ps1 -ModelFile <name>` passes it, and it
+ *     outranks the parameter, since a caller that names a file on the command
+ *     line has said which one it means.
  *
  *  1. `files/models/` inside the app, where the application's own download puts
  *     it. This is the faithful path and the one to use when it is available:
@@ -58,6 +64,9 @@ internal object TestModel {
     /** Where the model went the last time somebody set this machine up. */
     private val handDroppedDir = File("/data/local/tmp/models")
 
+    /** The instrumentation argument that names the model file for one run. */
+    private const val ARGUMENT_MODEL_FILE = "demoapp.modelFile"
+
     /** A model on the device, with the name to log it under. */
     internal data class UnderTest(
         val id: String,
@@ -78,29 +87,38 @@ internal object TestModel {
      * @param id the catalogue entry to prefer; the app's own download names the
      *   file, so a caller that needs a different model passes it here.
      * @param fileName a model file to use before the catalogue entry, for a test
-     *   that needs one known to answer on this device. Absent or not on the
-     *   device, the lookup falls through to @param id and says so.
+     *   that needs one known to answer on this device. The `demoapp.modelFile`
+     *   instrumentation argument outranks it. Absent or not on the device, the
+     *   lookup falls through to @param id and says so.
      */
     fun orNull(prefix: String, id: String = DEFAULT_ID, fileName: String? = null): UnderTest? {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val container = (context.applicationContext as com.kayoyak.demoapp.DemoApplication).container
 
+        // The command line wins over the parameter, and a blank argument is not a
+        // name: `-e demoapp.modelFile ""` is what an unset shell variable looks
+        // like, and treating it as a file name would report every model missing.
+        val named = InstrumentationRegistry.getArguments()
+            .getString(ARGUMENT_MODEL_FILE)
+            ?.takeIf { it.isNotBlank() }
+            ?: fileName
+
         val appModels = File(context.filesDir, "models")
-        if (fileName != null) {
-            val named =
+        if (named != null) {
+            val file =
                 listOf(appModels, handDroppedDir)
-                    .map { File(it, fileName) }
+                    .map { File(it, named) }
                     .firstOrNull { it.isFile && it.length() > 0L }
-            if (named != null) {
+            if (file != null) {
                 println(
-                    "$prefix: NOTE - using the named model $fileName " +
-                        "(${named.length()} bytes, from ${named.parentFile?.absolutePath}); " +
+                    "$prefix: NOTE - using the named model $named " +
+                        "(${file.length()} bytes, from ${file.parentFile?.absolutePath}); " +
                         "the catalogue entry '$id' is not what this run measures.",
                 )
-                return UnderTest(fileName, fileName, named, catalogueFile = false)
+                return UnderTest(named, named, file, catalogueFile = false)
             }
             println(
-                "$prefix: NOTE - the named model $fileName is not on this device; " +
+                "$prefix: NOTE - the named model $named is not on this device; " +
                     "falling through to the catalogue entry '$id'",
             )
         }
