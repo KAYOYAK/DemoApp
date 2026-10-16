@@ -2028,3 +2028,47 @@ fire-and-forget write immediately reports a product bug in its first afternoon, 
 What it does not establish: one model, one emulator, one pair of prompts, and a load time that is
 the emulator's rather than a phone's. Whether the shipped model's answers are worth their download
 is the comparison the roadmap keeps a row for, and it needs a phone.
+## Whether the model should be allowed to think
+
+`LiteRtLlmEngine.configFor` passes `ThinkingConfig(enableThinking = false)`, and it went in
+because unbounded thinking looked exactly like a broken model: the catalogue's own Qwen3 spent
+whole generations in its `thought` channel and answered nothing. That is a symptom, and the
+setting costs whatever the model gains from thinking, so the budget route was measured rather
+than left as a guess.
+
+**The runtime says how the bound works.** Its own library carries
+`third_party/odml/litert_lm/runtime/components/constrained_decoding/thinking_budget_constraint.cc`
+and the line `Thinking budget is set but thinking_end_token_ids is empty. Ignoring thinking budget
+constraint.` — a budget is enforced by constrained decoding against the end-of-thinking token ids
+the *model* declares, so a file that does not declare them gets the budget silently ignored. That
+line never appears for `Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm`, and the trace comes back
+bounded, so on this model the budget is real.
+
+**What it buys, measured.** `ThinkingBudgetTest`
+(`app/src/androidTest/java/com/kayoyak/demoapp/inference/ThinkingBudgetTest.kt`) on
+`emulator-5554`, 2026-10-16, on the app's own file, two runs:
+
+| setting | trace | four questions | wall clock |
+| --- | --- | --- | --- |
+| `off` | none | 3 of 4 right | 33.2 s, then 31.1 s |
+| `budget 32` | 48 to 53 characters on every question | 3 of 4 right (the same three) | 58.4 s, then 58.2 s |
+| `budget 128` | 210 characters, and the generation reached the 256-token cap | not measured | 65.4 s on the one question |
+
+The question both settings got wrong is the only hard one — 30 students, 18 swim, 12 cycle, 5 do
+both, how many do neither — and they got it wrong *differently*: `x = 30 - 18 - 12 + 5 = 1`
+against `30 - 5 = 25`, where the answer is 5. The other three (addition, a weekday, a
+multiplication) were right under both. So the setting stays off: a bounded trace is not worth
+76% more wall clock on a phone, for the same answers.
+
+**The column that was wrong, and why the answers are the evidence.** The test's first version
+asked whether the answer contained the expected digit. The wrong answer to the first question
+contains a 5 while restating the question, so the column reported 4 of 4 for an arm that had 3 of
+4 — in both arms, in both runs. It is gone; the test prints the answers, the timings and the
+channel sizes, the way `ChatTurnTest` prints its answers, and a reader counts. Worth recording
+because the failure mode is attractive: a check that fires is easier to believe than a number
+that has to be read, and this one fired on the wrong answer every time.
+
+What this does not establish: one model at 0.6B, one emulator, four questions, and no phone. A
+larger shipped model is where thinking would pay, and the app can already show the trace — the
+reasoning section above the answer, closed by default — so the route is ready if the evidence
+ever turns.

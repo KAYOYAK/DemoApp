@@ -384,6 +384,18 @@ class LiteRtLlmEngine(private val cacheDir: File) : LlmEngine {
             // build behaves the same way at smaller scale: 253 messages for a
             // 19-character answer against 20 messages for a 58-character one.
             //
+            // Bounding it instead was measured rather than assumed. The runtime enforces a
+            // budget through constrained decoding against the model's own end-of-thinking
+            // tokens, and this model declares them: with `thinkingTokenBudget = 32` the
+            // trace held at 48 to 53 characters across four questions, where the same
+            // first question unbounded held 951. On four questions whose answers can be
+            // read, the two settings answered three the same way -- addition, a weekday,
+            // a multiplication -- and got the one hard question wrong differently (1
+            // against 25, where the answer is 5), in 31.1 s against 58.2 s of wall clock.
+            // So thinking off is not a limitation this app accepted; it is the setting
+            // that gave the same answers in the time a phone can afford.
+            // `ThinkingBudgetTest` is that measurement.
+            //
             // Nothing is lost by this. A model that thinks anyway still reaches the
             // screen: channel text is recorded by [ReplyAssembler.addChannelText], and
             // inline `<think>` blocks still go through [ReasoningSplitter]. What is off is
