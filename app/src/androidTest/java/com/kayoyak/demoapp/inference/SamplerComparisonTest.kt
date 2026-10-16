@@ -45,12 +45,15 @@ import java.io.File
  * **Which model it runs on, and why that one is named.** The first run of this
  * test, on 2026-10-16, loaded the catalogue entry `TestModel` prefers -- the
  * 4-bit Qwen3 -- and got six samples of zero tokens, with an empty reasoning
- * channel as well. The engine's own test failed the same way on the same model
- * (`generation produced no tokens`, `LiteRtLlmEngineTest.kt:142`), which makes
- * the silence the model and this emulator rather than the sampler. To measure
- * anything at all the comparison names the one model on this machine whose
- * output can be read, and [TestModel] logs it when that name is not on the
- * device and the catalogue entry answers instead.
+ * channel as well. `LiteRtLlmEngineTest` failed the same way on the same model,
+ * and the reading taken at the time was that the model was silent on this
+ * emulator. It was not: the runtime hands a reply back on named channels, the
+ * engine read only `contents`, and the catalogue's model routes what it writes
+ * into its declared `thought` channel -- fixed the same day (`ThinkingChannelTest`,
+ * and *The catalogue's own model was never silent* in `docs/OPEN-WIRING.md`). The
+ * comparison has since run on both models, the catalogue's file included, each
+ * named with `-ModelFile` when it is not the one the test was built around;
+ * [TestModel] logs which file answered.
  *
  * A run without a model on the device prints SKIPPED and passes, like the engine
  * tests; read the log rather than trusting a green result.

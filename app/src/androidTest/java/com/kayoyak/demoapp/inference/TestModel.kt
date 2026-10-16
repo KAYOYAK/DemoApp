@@ -15,11 +15,12 @@ import java.io.File
  *  0. A file the run names, if [orNull]'s `fileName` is given or the run passes
  *     `-e demoapp.modelFile <name>` to the instrumentation. Looked for in the
  *     app's own `files/models/` first, then in `/data/local/tmp/models`, and it
- *     wins over the catalogue entry. A run names a file when it needs a model it
- *     knows answers on this machine, because the catalogue's own entry can be
- *     installed and silent -- measured on 2026-10-16: the 4-bit Qwen3 below
- *     produced no tokens at all on an x86_64 emulator, so the sampler comparison
- *     ran on a model whose text can be read. The log says which file answered.
+ *     wins over the catalogue entry. A run names a file to choose which of the
+ *     models on the device it measures: on 2026-10-16 the sampler comparison needed
+ *     that, because the catalogue's own entry looked silent on this emulator — it
+ *     was answering on a channel the engine did not read, which is fixed (see
+ *     `LiteRtLlmEngine.channelTexts`), and the comparison now runs on it too. The
+ *     log says which file answered.
  *
  *     The argument exists because comparing two models means having both on the
  *     device, and choosing between them must not cost an edit and a rebuild:

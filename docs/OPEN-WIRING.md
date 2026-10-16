@@ -1759,8 +1759,13 @@ That message now carries the model id, the file name and the backend, because th
 `generation produced no tokens` and nothing else, which leaves a reader guessing which model was
 silent. What the silence means is not established here: the file is the one the downloader fetches and
 verifies, `files/models/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm`, 344,671,744 bytes, and the engine
-reports no error — it loads it and generates nothing. It is a property of that model on this runtime,
-and it is why the comparison names its model explicitly instead of taking the catalogue's.
+reports no error — it loads it and generates nothing. This is the state of knowledge at the time of the
+run, and the comparison below names its model explicitly instead of taking the catalogue's for exactly
+that reason. **The meaning was found later the same day, and it was not the model**: the runtime was
+returning the reply on a named channel the engine did not read, and thinking at the model's default
+spent the entire reply budget before reaching an answer. This prompt now comes back as
+`The result is: 1 2 3 4 5 6 7 8 9 10.` through the app's own engine; see *The catalogue's own model was
+never silent* below.
 
 **The second run had a model that answers.** `SAMPLER: NOTE — using the named model
 SmolLM2_360M_instruct.litertlm (373,719,040 bytes, from /data/user/0/com.example.demoapp/files/models);
