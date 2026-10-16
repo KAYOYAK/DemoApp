@@ -176,7 +176,18 @@ Write-Host ''
 # `println` from an instrumented test lands in logcat under `System.out`, which
 # is why a run that measured something could still leave nothing behind. The
 # buffer is cleared here so what is read back afterwards belongs to this run.
+#
+# Read as a stream rather than dumped afterwards. On an emulator a dump works; on
+# a real phone it did not: the phone's own logging writes far faster than a test
+# does -- 41.7 MB in thirteen minutes on the one used here -- and the buffer had
+# rotated past every printed line by the time the run returned. A reader started
+# before the run and stopped after it does not depend on the buffer still holding
+# what we came for.
 [void](Invoke-Adb @('shell', 'logcat', '-c'))
+$logStream = Join-Path $env:TEMP 'dsh-instrumented-logcat.txt'
+if (Test-Path $logStream) { Remove-Item $logStream -Force }
+$logcatProcess = Start-Process -FilePath $adb -ArgumentList @('-s', $Serial, 'logcat', '-v', 'brief', '-s', 'System.out:V', 'TestRunner:I') `
+    -RedirectStandardOutput $logStream -NoNewWindow -PassThru
 $instrumentArgs = @('shell', 'am', 'instrument', '-w', '-e', 'class', $Class)
 if ($ModelFile) {
     Write-Host "  model  : $ModelFile (named by this run)" -ForegroundColor DarkGray
@@ -190,10 +201,13 @@ Write-Host $result
 # it: the sampler comparison prints its measurements and nothing else, and
 # capturing this script's stdout lost them, so a green run's numbers were gone
 # while the same run's failure text survived. Two sources are written to one
-# file: the stream above, and the lines the tests printed, read back from logcat.
-# Those follow one convention (`SAMPLER:`, `LITERT-ENGINE:`, `DEVICE-AUTH:`,
-# `SPEECH:`), so the rule is a prefixed word rather than a list of names.
-$logcat = & $adb -s $Serial logcat -d -v brief 2>&1 | Out-String
+# file: the stream above, and the lines the tests printed, taken from the logcat
+# stream this run started. Those follow one convention (`SAMPLER:`,
+# `LITERT-ENGINE:`, `DEVICE-AUTH:`, `SPEECH:`), so the rule is a prefixed word
+# rather than a list of names.
+Start-Sleep -Milliseconds 800
+try { $logcatProcess.Kill() } catch { }
+$logcat = Get-Content $logStream -ErrorAction SilentlyContinue | Out-String
 $printed = $logcat -split "`r?`n" |
     ForEach-Object {
         # `-v brief` writes `I/System.out( 1234): message`; the tag is stripped so
