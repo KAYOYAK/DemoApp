@@ -984,7 +984,7 @@ this up:
 - **The failure has now been observed in a plain full-suite run**, not only under a
   rerun or on a loaded machine: the mutation sweep's baseline attempt 1 was red with
   `opening a conversation that is gone leaves the screen alone`
-  (`app/src/test/java/com/example/demoapp/ui/chat/ChatViewModelTest.kt:1101`), a
+  (`app/src/test/java/com/kayoyak/demoapp/ui/chat/ChatViewModelTest.kt:1101`), a
   thirteenth distinct name, in the same class, with the same shape — `runBlocking` plus
   `vm.await { … }`. Attempt 2 of the same baseline was green. The sweep tolerates this
   on purpose (`$baselineAttempts = 3`, with the reason written at the call); `ci.yml`
@@ -1647,6 +1647,18 @@ this still does not measure is the rate a user meets — the suite renames files
 does — but it does say that a refusal which outlives the window is not the shape of the ones this machine
 produces.
 
+**What the refusal is not.** The obvious suspect is a reader: `save` replaces a file that `list` or `load`
+may be reading at that instant, and a Windows reader that opened without `FILE_SHARE_DELETE` would make
+the replace fail every time the two overlap — which would also explain why the window absorbs it, since
+the read lasts milliseconds. Measured on 2026-10-16 with a throwaway Java program on this machine (Java 25,
+Windows 11): a `FileInputStream` and a `Files.newInputStream` were each held open on the target, and a
+`Files.newByteChannel` on it as well, while `Files.move(tmp, target, REPLACE_EXISTING)` was attempted; all
+three moves succeeded and the file was replaced. So a reader in this process does not hold the file against
+the rename, the write path is not racing its own reader, and the refusal comes from outside the process —
+the scanner or the indexer the retry's own comment names. That is worth having measured rather than
+assumed: it retires the one cause that would have been this app's own bug, and it is why the retry stayed
+the right fix instead of a wider window.
+
 ## What the lock and the read-aloud path answer on a device
 
 Two seams cannot be reached from a JVM test: what `BiometricManager.canAuthenticate` says on the
@@ -1724,7 +1736,7 @@ not match, in the section above — is a server-side fact rather than a device o
 
 `docs/ROADMAP.md` asked whether the `topK` default of 20 is any good. It had been lowered from 40 on
 the publisher's recommendation, and nothing in this project had checked it.
-`SamplerComparisonTest` (`app/src/androidTest/java/com/example/demoapp/inference/SamplerComparisonTest.kt`)
+`SamplerComparisonTest` (`app/src/androidTest/java/com/kayoyak/demoapp/inference/SamplerComparisonTest.kt`)
 is that check: the same prompt the app's own benchmark uses (「用一句话说明什么是光合作用。」), the engine
 loaded once per setting, `temperature = 0.8` and three seeds per setting, both settings in one run so
 they share a machine and a warmed cache. The benchmark cannot answer the question itself — it runs at
@@ -1846,3 +1858,44 @@ the device under the new id — which is the part that would have caught a manif
 path that no longer resolves. What a user sees is in the roadmap row: an installed copy is not upgraded
 but joined, the old app and the new one side by side, which is why the change was made while the only
 install anywhere was this machine's emulator.
+
+## Four gates that could not tell a pass from a check that never ran
+
+The rename exposed one way a gate can point at nothing — a path that no longer exists — and the fix left
+the quieter half in place: a gate can also *name* a file, or excuse one, without anything checking that the
+name reaches anything. Checked across all ten gates on 2026-10-16 by planting each defect in a scratch copy
+of the tree and reading the exit code, four behaved the same way. Each now fails loudly, and each guard is
+proven rather than argued — the planted defect on the left of every row, the exit code on the right.
+
+| Gate | Defect planted in a scratch clone | Before | After |
+| --- | --- | --- | --- |
+| `scripts/check-ui-copy.ps1` | one of the eleven names in `$developerFacing` renamed away | `exit 0`, `CLEAN` | `exit 2`, naming the file that is missing |
+| `scripts/check-privacy.ps1` | the package directory deleted | `exit 0`, `CLEAN` | `exit 2`, `no Kotlin or Java sources under app/src/main` |
+| `scripts/check-ui-wiring.ps1` | an `$exempt` key naming a screen that does not exist | nothing said so — the list is empty, so no key is read | `exit 1`, naming the key and the entry it does not reach |
+| `scripts/check-embedded-notices.ps1` | an acknowledgement for an artifact the build does not produce | `exit 0`, `No new embedded notices` | `exit 1`, `STALE RECORD` |
+
+Two of the four were live at the moment they were found. `check-ui-copy.ps1`'s eleven names and
+`check-privacy.ps1`'s source paths both aimed at `com/example/demoapp`, which no longer existed, and both
+reported `CLEAN` over an empty population: the first read no file for the copy it checks, the second read
+no file for the permissions it checks. The other two were future defects: `check-ui-wiring.ps1` reads its
+exemption keys only when a key exists, and `check-embedded-notices.ps1` compares its acknowledgements
+against the build's findings, so an acknowledgement for an artifact that is gone was reported as
+`No new embedded notices`.
+
+The convention all four follow now is the one the other six already had: a gate that cannot see what it was
+pointed at does not say `CLEAN`. That needs an exit code of its own — `2` for "this check did not run"
+against `1` for "this check ran and found something" — so a caller can tell a broken gate from a red tree.
+
+Six gates did not need the fix, which is the part worth recording rather than the four that did:
+`check-model-pins.ps1` throws when its pattern stops matching (`the pattern has gone stale, which is worse
+than a failing check`); `mutation-sweep.ps1` reports `STALE MUTATIONS` when a mutation no longer applies;
+`check-licenses.ps1` fails on a lock-file dependency the licence report no longer has; the callback gate
+exits `2` with `SOURCE NOT FOUND`; `check-unused-strings.ps1` fails when no `R.string` reference is found
+anywhere, calling that out as a check that did not run; and `check-legal-docs.ps1` and the `Navigation.kt`
+branch of `check-ui-wiring.ps1` say the same when the file they parse is absent.
+
+Both directions were checked on the real tree, not only on clones: with each defect planted the gate exits
+non-zero and names what it could not find, and on the real tree `check-ui-copy.ps1`, `check-privacy.ps1`
+and `check-ui-wiring.ps1` report `CLEAN` while `:app:testDebugUnitTest` still exits 0. The notices gate
+reads a built APK, which is why its planted proof is a scratch clone and its real-tree run is the one the
+pre-commit hook performs on every commit — `78 AARs, 50 with notices, four findings accepted`.

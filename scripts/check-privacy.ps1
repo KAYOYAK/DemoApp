@@ -305,8 +305,29 @@ if (Test-Path $gradlew) {
 Write-Host ''
 Write-Host '  [3] network calls in application source' -ForegroundColor DarkGray
 $mainSrc = Join-Path $ProjectDir 'app/src/main'
+
+# This section is the only check in the pipeline that reads the application's own
+# code, and both of its inputs can go missing quietly: a tree that is not there,
+# and an exemption naming a file that no longer exists. With the package directory
+# deleted on 2026-10-16 this gate reported CLEAN -- no source files, no network
+# patterns among them, and nothing in the output to say the network scan had
+# examined nothing at all. Six gates held the package path as a literal until the
+# same day; this is the per-file version of that mistake.
+$sourceFiles = @(Get-ChildItem $mainSrc -Recurse -File -Include *.kt, *.java -ErrorAction SilentlyContinue)
+if ($sourceFiles.Count -eq 0) {
+    Write-Host '      FAILED no Kotlin or Java sources under app/src/main, so this check did not run.' -ForegroundColor Red
+    exit 2
+}
+$excused = @($networkApiAllowed.Keys | Where-Object {
+        -not (Test-Path -LiteralPath (Join-Path $mainSrc $_) -PathType Leaf)
+    })
+if ($excused.Count -gt 0) {
+    Write-Host ("      FAILED these files are excused from this check and are not there: {0}. So this check did not run." -f ($excused -join ', ')) -ForegroundColor Red
+    exit 2
+}
+
 $offenders = @()
-Get-ChildItem $mainSrc -Recurse -File -Include *.kt, *.java -ErrorAction SilentlyContinue | ForEach-Object {
+$sourceFiles | ForEach-Object {
     $relative = $_.FullName.Substring((Resolve-Path $mainSrc).Path.Length).TrimStart('\', '/') -replace '\\', '/'
     $hits = @()
     foreach ($pattern in $networkApiPatterns) {

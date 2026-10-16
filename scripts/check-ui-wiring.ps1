@@ -78,6 +78,13 @@ $navigationFile = Join-Path $sourceRoot "$appPkg/Navigation.kt"
 # The key is the screen's function name, the value is the callback's name.
 $exempt = @{}
 
+# Which of those keys a call site actually reached. An exemption excuses a call site
+# that exists: a key like "ChatScreen.onRetry" stops matching the moment the screen or
+# the parameter is renamed, and from then on it excuses nothing while still reading as
+# a decision. That silence is the same one that let eleven file names in
+# check-ui-copy.ps1 keep their reasons with no file to excuse, measured on 2026-10-16.
+$usedExempt = [System.Collections.Generic.HashSet[string]]::new()
+
 # ------------------------------------------------------------------ parsing ---
 
 # Reads a file and hands back its lines, so a report can name the line a problem
@@ -352,7 +359,7 @@ foreach ($site in $callSites) {
                 if ($passed -contains $param.Name) { continue }
 
                 $key = "$screenName.$($param.Name)"
-                if ($exempt.ContainsKey($key)) { continue }
+                if ($exempt.ContainsKey($key)) { [void]$usedExempt.Add($key); continue }
 
                 if (-not $param.HasDefault) {
                     $problems.Add(
@@ -374,6 +381,12 @@ foreach ($site in $callSites) {
 
 if ($calls -eq 0) {
     $problems.Add('no screen call was found anywhere, which means this check did not run')
+}
+
+foreach ($key in $exempt.Keys) {
+    if (-not $usedExempt.Contains($key)) {
+        $problems.Add("`$exempt names '$key', which matched no call site. The screen or the parameter it names is gone, so the entry excuses nothing.")
+    }
 }
 
 # -------------------------------------------------------------------- rule 4 ---

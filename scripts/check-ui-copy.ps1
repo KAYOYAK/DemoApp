@@ -54,6 +54,20 @@ $developerFacing = @(
     "$appPkg/inference/LiteRtLlmEngine.kt"
 )
 
+# A name in that list is a file this gate has agreed not to judge, so the name has
+# to reach a file. A name that reaches nothing excuses nothing, and the reason
+# written beside it stops being true the moment the file it describes is renamed or
+# deleted. Measured on 2026-10-16: renaming ChatStore.kt left the gate reporting
+# CLEAN -- eleven names, ten files, and no way to tell from the output that one of
+# the eleven had stopped being looked at and stopped being excused.
+$missingExcuses = @($developerFacing | Where-Object {
+        -not (Test-Path -LiteralPath (Join-Path $sourceRoot $_) -PathType Leaf)
+    })
+if ($missingExcuses.Count -gt 0) {
+    Write-Output ("These files are excused from this check and are not there: {0}. So this check did not run." -f ($missingExcuses -join ', '))
+    exit 2
+}
+
 # A whole quoted literal. The whole thing, not the first two words of it: matching
 # a prefix let `"yyyy-MM-dd HH:mm"` through as prose because the colon it should
 # have been judged on was past the end of the match.

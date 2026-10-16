@@ -195,6 +195,31 @@ $unacknowledged = @($findings | Where-Object {
     -not (Get-AcknowledgementFor -Finding $f)
 })
 
+# An acknowledgement is a decision recorded against a finding in THIS build, and the
+# report only ever walked findings and asked which entry covered them. An entry naming
+# an artifact that is no longer here was therefore read by nobody: the record could
+# keep a decision about a notice the build does not contain, and the same entry would
+# excuse that term silently the moment the artifact came back at another version.
+# Measured on 2026-10-16, with an acknowledged artifact removed from the scan: the
+# gate printed "No new embedded notices" and exited 0 with the record untouched.
+$usedAcknowledgements = @($findings | ForEach-Object { Get-AcknowledgementFor -Finding $_ })
+$staleAcknowledgements = @($acknowledged | Where-Object { $usedAcknowledgements -notcontains $_ })
+
+if ($staleAcknowledgements.Count -gt 0) {
+    Write-Host ''
+    Write-Host ("  STALE RECORD - {0} acknowledgement(s) name a finding this build does not have:" -f $staleAcknowledgements.Count) -ForegroundColor Red
+    foreach ($s in $staleAcknowledgements) {
+        Write-Host ("    {0}" -f $s.artifact) -ForegroundColor Red
+        Write-Host ("      notice  : {0}" -f $s.notice) -ForegroundColor DarkGray
+        Write-Host ("      licence : {0}" -f $s.licence) -ForegroundColor DarkGray
+    }
+    Write-Host ''
+    Write-Host '  A decision about a notice that is not here is a decision about nothing.' -ForegroundColor DarkGray
+    Write-Host '  Delete the entry, or re-record it against the finding this build has.' -ForegroundColor DarkGray
+    Write-Host ''
+    exit 1
+}
+
 if ($findings.Count -eq 0) {
     Write-Host '  CLEAN - no copyleft licence named in any embedded notice.' -ForegroundColor Green
     Write-Host ''
