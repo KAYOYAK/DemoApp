@@ -1864,8 +1864,10 @@ install anywhere was this machine's emulator.
 The rename exposed one way a gate can point at nothing — a path that no longer exists — and the fix left
 the quieter half in place: a gate can also *name* a file, or excuse one, without anything checking that the
 name reaches anything. Checked across all ten gates on 2026-10-16 by planting each defect in a scratch copy
-of the tree and reading the exit code, four behaved the same way. Each now fails loudly, and each guard is
-proven rather than argued — the planted defect on the left of every row, the exit code on the right.
+of the tree and reading the exit code, four behaved the same way, and a fifth instance — inside one of the
+four — turned up when the gate was mis-invoked, at the end of this section. Each now fails loudly, and each
+guard is proven rather than argued — the planted defect on the left of every row, the exit code on the
+right.
 
 | Gate | Defect planted in a scratch clone | Before | After |
 | --- | --- | --- | --- |
@@ -1897,5 +1899,14 @@ branch of `check-ui-wiring.ps1` say the same when the file they parse is absent.
 Both directions were checked on the real tree, not only on clones: with each defect planted the gate exits
 non-zero and names what it could not find, and on the real tree `check-ui-copy.ps1`, `check-privacy.ps1`
 and `check-ui-wiring.ps1` report `CLEAN` while `:app:testDebugUnitTest` still exits 0. The notices gate
-reads a built APK, which is why its planted proof is a scratch clone and its real-tree run is the one the
-pre-commit hook performs on every commit — `78 AARs, 50 with notices, four findings accepted`.
+resolves the release classpath rather than reading a built APK — on the real tree it reports `78 AARs, 50
+with notices, four findings accepted` — so its planted proof is a scratch clone and its real-tree run is
+the one the pre-commit hook performs when a build file changes.
+
+**The fifth instance was found by mis-invoking a gate.** `check-embedded-notices.ps1` declared a
+`-BuildDir` parameter, documented as "Directory of a built APK to cross-check against. Optional", and never
+read it: no caller passes it, and the gate's answer is identical when one is. Pointed at an APK file
+instead of the directory holding it, it printed `No new embedded notices` and exited 0 — a cross-check it
+promised and nothing performed. The parameter is removed rather than implemented, because resolving the
+classpath is the check this gate exists to be; a caller that still passes `-BuildDir` now gets PowerShell's
+parameter-binding error and a non-zero exit, which is the loud refusal the rest of this section is about.

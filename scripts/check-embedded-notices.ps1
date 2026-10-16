@@ -25,16 +25,12 @@
 .PARAMETER ProjectDir
     Android project root. Defaults to the parent of this script's directory.
 
-.PARAMETER BuildDir
-    Directory of a built APK to cross-check against. Optional.
-
 .EXAMPLE
     .\check-embedded-notices.ps1
 #>
 [CmdletBinding()]
 param(
-    [string] $ProjectDir,
-    [string] $BuildDir
+    [string] $ProjectDir
 )
 
 $ErrorActionPreference = 'Stop'
