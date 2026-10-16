@@ -2072,3 +2072,90 @@ What this does not establish: one model at 0.6B, one emulator, four questions, a
 larger shipped model is where thinking would pay, and the app can already show the trace — the
 reasoning section above the answer, closed by default — so the route is ready if the evidence
 ever turns.
+
+## The phone, 2026-10-16
+
+Every row that said "a phone attached to this machine" stopped saying it today. A Redmi `M332BF`
+(`warsaw`, `arm64-v8a`, Android 17 / API 37, HyperOS 4) attached as `cea83ea` ran the same debug
+build the emulator runs — `app/build.gradle.kts` publishes `arm64-v8a` beside `x86_64`, so the APK
+already in `build-logs/` installed without a rebuild.
+
+| class | the phone's own words | result |
+| --- | --- | --- |
+| `EncryptedStorageTest` | nothing printed | `OK (3 tests)`, 0.105 s |
+| `DeviceAuthTest` | `DEVICE-AUTH: canAuthenticate=true` | `OK` |
+| `SpeechTest` | `SPEECH: available=false finished=true`; `SPEECH: SKIPPED - this device reports no Chinese voice, so the read-aloud button stays hidden` | `OK (2 tests)` |
+| `LiteRtLlmEngineTest` | `probe says CPU can generate on this device`; `VERDICT = streaming. 95 ms average gap between tokens.`; `load -> Success(CPU)`; `11 tokens in 6481 ms`; `no-model failure reported as IllegalStateException` | `OK (4 tests)`, 73.1 s |
+| `SamplerComparisonTest` | the table further down | `OK`, 101.3 s, then 101.6 s |
+| `ChatTurnTest` | the two answers further down | `OK (1 test)`, 36.0 s |
+
+**The lock screen is real here.** `canAuthenticate=true` is the answer an emulator cannot give:
+this phone has a lock-screen credential, so the app's lock path is reachable on hardware rather than
+only compilable. The TTS answer is the other kind of fact, and it took a package listing to believe:
+`settings get secure tts_default_synth` and `tts_default_locale` are both `null`, and
+`pm list packages | grep tts` returns only `com.miui.voiceassist`, `com.miui.voicetrigger` and
+`com.miui.voiceassistoverlay` — no engine. The app hides the read-aloud button, which is the branch
+for a missing voice exercised by a device that is really missing one, where the emulator's image
+ships Pico TTS and takes the other branch.
+
+**Streaming is honest on this device.** The engine's token stream on the phone: 43 `Token` events
+and one `Done`, the first token after 16,479 ms and then 95 ms average between tokens — a user here
+really does watch words arrive, which is what `LlmEngine.generate`'s incremental rendering promises.
+The same class's full load-and-generate path came back `load -> Success(CPU)`, 11 tokens in 6,481 ms
+and `One color is red, and one word is yellow.` at `contextTokens=290`, and generating with no model
+loaded failed as `IllegalStateException` rather than something else.
+
+**The download path, confirmed by its digest.** The owner installed the published app on this phone
+and downloaded the catalogue's 4-bit Qwen3 in it. The artifact agrees: `files/models/` holds one
+file, `Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm`, 344,671,744 bytes, written 15:55, and `sha256sum`
+over it returns `03e7da1e…d2856` — the digest pinned at `ModelCatalogue.kt:204` and in the
+publisher's LFS pointer, which is what `ModelStore.verify` decides "installed" from. The runner's own
+step said `already in files/models/, skipping the copy`, so nothing on this side put it there.
+
+**The sampler question, answered on the model the app ships.** 128 max tokens, temperature 0.8,
+topP 0.95, seeds 1–3, the app's own benchmark prompt, on the catalogue's 4-bit Qwen3, run twice on
+the phone:
+
+| run | setting | distinct texts | median repeat ratio | median chars | median tokens/s |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `topK=40` | 3 of 3 | 0.000 | 35.000 | 3.394 |
+| 1 | `topK=20` | 3 of 3 | 0.000 | 35.000 | 3.540 |
+| 2 | `topK=40` | 3 of 3 | 0.000 | 35.000 | 2.465 |
+| 2 | `topK=20` | 3 of 3 | 0.000 | 35.000 | 3.162 |
+
+The result sits where the table cannot show it: every seed wrote the same text under both settings,
+character for character, in both runs — six identical pairs, and the two runs agree with each other
+as well. The medians moved further between the runs than between the settings (2.465 against 3.394
+for the same `topK = 40`), which is the scale that difference lives on. So on this model, this prompt
+and this device, taking `topK` from 40 to 20 was invisible in the words and inside the device's own
+run-to-run spread in speed. That supports "the change costs nothing measurable here"; it cannot
+support "it helps".
+
+**The app's own chat pipeline, on the phone.** The same `ChatTurnTest` that took 143.8 s on the
+emulator took 36.0 s here, its model load 23,285 ms against the emulator's 126,975 ms. It asked the
+app two Chinese questions and read the conversation back from the encrypted store:
+
+- turn one: 光合作用是植物、藻类及某些微生物在阳光下将光能转化为化学能的过程，以合成有机物并释放氧气的过程。
+- turn two: 呼吸作用是生物体通过细胞内的酶作用，将有机物分解并释放出能量的过程。
+- context tokens 345 then 387, so the second turn carried the first; four messages on disk,
+  conversation `2b039ea6-0f70-46c3-ab6e-d6a08ede6a06`.
+
+**A phone freezes what it cannot see, and that is not a test failure.** The first
+`LiteRtLlmEngineTest` run on this phone stopped after `probe says CPU can generate on this device`:
+the process stayed alive, `top` reported 0.0% CPU over repeated samples, and `run-as …
+cat /proc/<pid>/task/*/wchan` answered `do_freezer_trap` for every thread — HyperOS's app freezer,
+because 抖音 was the app in front. `kill -3` from the shell was refused (`Operation not permitted`)
+and the same signal through `run-as` produced a `Signal Catcher` line with no dump. What unstuck the
+runs was the owner's own move — keep the app open and put 抖音 in a floating window over it — and
+the three later runs all ran that way. Two other phone behaviours are worth knowing before the next
+run: its log flow is about 41.7 MB in 13 minutes, which rotates the buffer past anything printed
+before the run, so `scripts/run-instrumented-test.ps1` now starts a filtered `logcat` stream before
+`am instrument` and stops it afterwards instead of reading `logcat -d` when the run is over; and
+`adb install -r` restarts the app, so a run that begins with an install must expect the app it just
+replaced to be gone — one `adb install` was refused here with `INSTALL_FAILED_USER_RESTRICTED:
+Install canceled by user`, and the retry with the app in the foreground went through.
+
+What this does not establish: one phone, one OS version, one model. The sampler answer is one prompt
+on one device; the freezer is one vendor's behaviour and the workaround is not a fix; and the phone
+reported `CELLULAR` as its active network with WiFi `DISCONNECTED` while the owner said he was on
+WiFi, which is why the model was pushed over USB rather than downloaded again.
