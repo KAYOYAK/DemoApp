@@ -14,6 +14,8 @@ param(
 
 $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $PSScriptRoot
+. "$PSScriptRoot/app-package.ps1"
+$appPkg = Get-AppPackage $root
 # The JDK is named here only as a fallback. Hardcoding one machine's install path meant
 # this script did not run anywhere else -- including CI, which is the one place a sweep
 # is worth having, because a survivor list nobody looks at is a comment.
@@ -435,7 +437,7 @@ $caught = 0
 # impossible to miss: the sweep does not start.
 $stale = @()
 foreach ($m in $mutations) {
-    $path = Join-Path "$root/app/src/main/java/com/example/demoapp" $m.file
+    $path = Join-Path (Join-Path "$root/app/src/main/java" $appPkg) $m.file
     if (-not (Test-Path $path)) {
         $stale += "$($m.name)  —  file not found: $($m.file)"
     } elseif (-not (Get-Content $path -Raw).Contains($m.from)) {
@@ -457,7 +459,7 @@ if ($stale.Count -gt 0) {
 Write-Host "All $($mutations.Count) anchors resolve." -ForegroundColor Green
 
 foreach ($m in $mutations) {
-    $path = Join-Path "$root/app/src/main/java/com/example/demoapp" $m.file
+    $path = Join-Path (Join-Path "$root/app/src/main/java" $appPkg) $m.file
     $original = Get-Content $path -Raw
     # Emptied before the run, so that "no failing test" can only mean what it says.
     # Reading the directory as it stands reads the previous run's results whenever

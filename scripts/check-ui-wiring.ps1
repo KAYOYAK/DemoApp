@@ -70,7 +70,9 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $ProjectDir) { $ProjectDir = Split-Path -Parent $scriptDir }
 $root = $ProjectDir
 $sourceRoot = Join-Path $root 'app/src/main/java'
-$navigationFile = Join-Path $sourceRoot 'com/example/demoapp/Navigation.kt'
+. "$PSScriptRoot/app-package.ps1"
+$appPkg = Get-AppPackage $root
+$navigationFile = Join-Path $sourceRoot "$appPkg/Navigation.kt"
 
 # Callbacks a call site is allowed to leave to its default, with the reason.
 # The key is the screen's function name, the value is the callback's name.

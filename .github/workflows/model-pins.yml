@@ -23,13 +23,13 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'app/src/main/java/com/example/demoapp/model/ModelCatalogue.kt'
+      - 'app/src/main/java/**/model/ModelCatalogue.kt'
       - 'scripts/check-model-pins.ps1'
       - '.github/workflows/model-pins.yml'
   pull_request:
     branches: [ main ]
     paths:
-      - 'app/src/main/java/com/example/demoapp/model/ModelCatalogue.kt'
+      - 'app/src/main/java/**/model/ModelCatalogue.kt'
       - 'scripts/check-model-pins.ps1'
       - '.github/workflows/model-pins.yml'
   schedule:

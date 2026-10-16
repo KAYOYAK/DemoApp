@@ -63,7 +63,7 @@ val releaseKeyPassword = signingValue(
 )
 
 android {
-    namespace = "com.example.demoapp"
+    namespace = "com.kayoyak.demoapp"
 
     // compileSdk only decides which APIs are visible while compiling; it does
     // not change runtime behaviour. targetSdk below stays at 36 and is what
@@ -79,7 +79,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.demoapp"
+        applicationId = "com.kayoyak.demoapp"
         // 26 rather than 24 for java.nio.file, which ChatStore uses to replace a
 // conversation file atomically; File.renameTo cannot do that consistently across
 // platforms. Android 8.0 is a reasonable floor for an app whose smallest model

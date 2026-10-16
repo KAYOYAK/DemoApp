@@ -30,6 +30,8 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 
 $problems = [System.Collections.Generic.List[string]]::new()
+. "$PSScriptRoot/app-package.ps1"
+$appPkg = Get-AppPackage $root
 
 function Read-Text([string] $relative) {
     $path = Join-Path $root $relative
@@ -75,7 +77,7 @@ if ($readme -and $readme -notmatch 'TRADEMARKS-AND-CLAIMS\.md') {
 
 # ------------------------------------------------- 2. publishers are credited ---
 
-$catalogue = Read-Text 'app/src/main/java/com/example/demoapp/model/ModelCatalogue.kt'
+$catalogue = Read-Text "app/src/main/java/$appPkg/model/ModelCatalogue.kt"
 if (-not $catalogue) {
     $problems.Add('the model catalogue could not be read, so publishers cannot be checked against it')
 } elseif ($trademarks) {

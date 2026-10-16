@@ -48,8 +48,9 @@
 
     ## Verification
 
-    Four injections of the real defect into `app/src/main/java/com/example/demoapp/ui/history/HistoryScreen.kt`,
-    each one expected to report, and a clean tree expected to report nothing:
+    Four injections of the real defect into `ui/history/HistoryScreen.kt` (under
+    `app/src/main/java`, with the package directory left out because it moves), each one
+    expected to report, and a clean tree expected to report nothing:
 
     | injection | reported |
     | --- | --- |

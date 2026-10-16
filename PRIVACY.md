@@ -51,7 +51,7 @@ it are deliberate:
   it; the asking is still the user's, because sending spends their battery and
   their model's attention on a question they had not finished writing.
 
-The app also accepts its own `com.example.demoapp.NEW_CHAT` action from its
+The app also accepts its own `com.kayoyak.demoapp.NEW_CHAT` action from its
 launcher shortcut. That action is not exported to anything else — a public one
 would let any app on the device clear the open conversation.
 

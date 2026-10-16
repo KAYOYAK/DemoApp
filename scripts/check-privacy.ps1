@@ -101,12 +101,15 @@ $forbiddenDependencies = @(
     @{ p = 'com.instabug';                why = 'Instabug telemetry' }
 )
 
+. "$PSScriptRoot/app-package.ps1"
+$appPkg = Get-AppPackage $ProjectDir
+
 # Files permitted to reference a network API, relative to app/src/main, with the
 # reason. Anything else touching the network breaks the promise, and this is the
 # only check that looks at the application's own code.
 $networkApiAllowed = @{
-    'java/com/example/demoapp/model/ModelDownloader.kt' = 'the only class that performs requests'
-    'java/com/example/demoapp/AppContainer.kt'          = 'constructs the single shared HTTP client'
+    "java/$appPkg/model/ModelDownloader.kt" = 'the only class that performs requests'
+    "java/$appPkg/AppContainer.kt"          = 'constructs the single shared HTTP client'
 }
 
 # Substrings that indicate a network capability. Deliberately broad: a false

@@ -36,13 +36,13 @@
     Install, place the model, run the inference engine tests.
 
 .EXAMPLE
-    .\run-instrumented-test.ps1 -Class com.example.demoapp.ui.main.MainScreenTest
+    .\run-instrumented-test.ps1 -Class com.kayoyak.demoapp.ui.main.MainScreenTest
     Run a different test class against the same install.
 #>
 [CmdletBinding()]
 param(
     [string] $ModelPath = 'D:\litert-test\SmolLM2_360M_instruct.litertlm',
-    [string] $Class     = 'com.example.demoapp.inference.LiteRtLlmEngineTest',
+    [string] $Class     = 'com.kayoyak.demoapp.inference.LiteRtLlmEngineTest',
     [string] $Serial    = 'emulator-5554'
 )
 
@@ -50,7 +50,7 @@ $ErrorActionPreference = 'Stop'
 
 $projectDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $adb        = 'D:\Android\Sdk\platform-tools\adb.exe'
-$package    = 'com.example.demoapp'
+$package    = 'com.kayoyak.demoapp'
 $testPackage = "$package.test"
 $runner     = 'androidx.test.runner.AndroidJUnitRunner'
 $modelName  = Split-Path -Leaf $ModelPath

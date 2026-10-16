@@ -33,7 +33,9 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $ProjectDir = if ($env:DEMOAPP_DIR) { $env:DEMOAPP_DIR } else { Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path) }
-$cataloguePath = Join-Path $ProjectDir 'app/src/main/java/com/example/demoapp/model/ModelCatalogue.kt'
+. "$PSScriptRoot/app-package.ps1"
+$appPkg = Get-AppPackage $ProjectDir
+$cataloguePath = Join-Path $ProjectDir "app/src/main/java/$appPkg/model/ModelCatalogue.kt"
 
 if (-not (Test-Path $cataloguePath)) {
     throw "Cannot find $cataloguePath"

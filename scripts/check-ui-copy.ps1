@@ -21,6 +21,8 @@ $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $PSScriptRoot
 $sourceRoot = Join-Path $root 'app/src/main/java'
+. "$PSScriptRoot/app-package.ps1"
+$appPkg = Get-AppPackage $root
 $problems = [System.Collections.Generic.List[string]]::new()
 
 # Files whose remaining strings are for developers rather than users. Named by
@@ -28,28 +30,28 @@ $problems = [System.Collections.Generic.List[string]]::new()
 # directory" would also skip the user-facing part of it, which is the mistake this
 # gate exists to catch.
 $developerFacing = @(
-    'com/example/demoapp/data/chat/ChatStore.kt',
-    'com/example/demoapp/model/ModelStore.kt',
-    'com/example/demoapp/model/ModelDownloader.kt',
-    'com/example/demoapp/model/ModelImporter.kt',
-    'com/example/demoapp/AppContainer.kt',
+    "$appPkg/data/chat/ChatStore.kt",
+    "$appPkg/model/ModelStore.kt",
+    "$appPkg/model/ModelDownloader.kt",
+    "$appPkg/model/ModelImporter.kt",
+    "$appPkg/AppContainer.kt",
     # Matching against an internal message to choose which resource to show. Read
     # by this app's own code, not by a person.
-    'com/example/demoapp/model/ModelDownloadCoordinator.kt',
+    "$appPkg/model/ModelDownloadCoordinator.kt",
     # The same thing one layer down: the runtime reports failures as classes and
     # messages, and the classification reads those to choose which of the
     # load_fail_* resources a person sees. The patterns are never rendered; the
     # matched text is kept as detail for a bug report and shown only if asked for.
-    'com/example/demoapp/inference/LoadFailure.kt',
+    "$appPkg/inference/LoadFailure.kt",
     # A lookup table of language keywords, matched against a code block. The one
     # entry that reads as an English word is `None`, which is Python. Nothing here
     # is rendered; the table decides what colour a word is.
-    'com/example/demoapp/ui/chat/SyntaxHighlighter.kt',
+    "$appPkg/ui/chat/SyntaxHighlighter.kt",
     # The validate() problem list is thrown at build time and never rendered.
-    'com/example/demoapp/model/ModelCatalogue.kt',
+    "$appPkg/model/ModelCatalogue.kt",
     # The runtime's own status codes and library names, kept verbatim so that
     # searching for them finds something.
-    'com/example/demoapp/inference/LiteRtLlmEngine.kt'
+    "$appPkg/inference/LiteRtLlmEngine.kt"
 )
 
 # A whole quoted literal. The whole thing, not the first two words of it: matching

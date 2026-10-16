@@ -1703,6 +1703,10 @@ debug pair the instrumented tests need, and its app data went with it.
 The second run was in the **debug install**, and this is the one the rest of this document depends
 on: it is what put the catalogue's own file where `TestModel.orNull` looks for it.
 
+Package ids in this section are the ones the runs used — `com.example.demoapp`, which became
+`com.kayoyak.demoapp` on 2026-10-16 (see the rename row in `docs/ROADMAP.md`). Paths and traces
+inside quoted output are left exactly as the tools printed them.
+
 ```
 $ adb shell run-as com.example.demoapp ls -l files/models/
 -rw------- 1 u0_a230 u0_a230 344671744 2026-10-16 04:09 Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm
@@ -1792,6 +1796,53 @@ from a model card and now also has a reading. The row that asks whether the app'
 still exists, and now says what is missing rather than that nothing had been tried: the same comparison,
 on a phone, on the model the app ships.
 
+## What a rename taught the gates, and the id that had two spellings
 
+The application id changed on 2026-10-16, from `com.example.demoapp` to `com.kayoyak.demoapp`. The
+owner had been asked for a domain and answered 「随便你吧」, so the project chose: `KAYOYAK` is this
+project's own namespace (the GitHub account, and the `CN` of the certificate the release is signed
+with) and `demoapp` is the label the release already carries, so nothing in the id pre-empts the
+product name, which stays a one-line change in `strings.xml`. `scripts/rename-package.ps1` did the
+work: 113 files and 3 directories, reading the old name **out of the build file** rather than assuming
+one, `git mv` for the source tree so history follows, markdown deliberately untouched because the
+documents quote paths as they were written, and a refusal to write unless `app/src` and
+`app/build.gradle.kts` are committed, so the rename is readable and revertable on its own.
 
+The rename had been rehearsed twice, so a build failure was the expected shape of trouble. The gates
+were what broke — four of the nine — and not because they compared a wrong value. They did not read
+the id at all. Six gates had `com/example/demoapp` inside them, as a path, and the id appears in two
+spellings: a package path (`com/example/demoapp`, in file paths) and a Java name (`com.example.demoapp`,
+in class names and `-Class` arguments). The gates held the path one, and they failed in the two ways a
+stale path fails: the ones that open a named file stopped finding it (`check-model-pins.ps1`,
+`check-privacy.ps1`, `check-callback-reachability.ps1`, `check-legal-docs.ps1`), and the ones that keep
+an exemption list went on matching paths that no longer exist — so they reported prose that had been
+excused while unable to open the file they excused it by name (`check-ui-copy.ps1`,
+`check-ui-wiring.ps1`, `mutation-sweep.ps1`).
 
+The fix is one reader instead of six copies: `scripts/app-package.ps1` exposes `Get-AppPackage $root`,
+which reads the `namespace = "…"` line from `app/build.gradle.kts` and returns it in path form. Every
+gate that names application sources dot-sources it now, the sweep's anchor paths are built from it,
+`.github/workflows/model-pins.yml` matches `app/src/main/java/**/model/ModelCatalogue.kt` instead of
+the package that used to be there, and the two places that must still spell the id literally are
+`run-instrumented-test.ps1`'s defaults — a test class's name is a Java name, not a path, and a gate
+cannot read it out of a namespace line.
+
+**The tool that rewrites names now checks what it rewrote.** A path that no longer exists is not the
+only way a rename can miss: a file whose extension the rewrite does not cover can still mention the old
+package. `rename-package.ps1` therefore scans `app/` and `scripts/` after writing and throws listing
+what is left. Both halves were proven on scratch clones of the real tree rather than argued: a clone
+with nothing left behind prints **No file under app/ or scripts/ still names the old package**, and a
+clone with one file planted where the rewrite cannot reach it —
+`app/src/test/java/<old package>/notes.txt`, a `.txt` the extension list skips, holding a path with the
+old name in it — throws and names that file. The first version of that message died of its own syntax
+(`Sort-Object -Unique -join` is not a thing) and printed a parameter-binding error where the list of
+files should have been: a check that fires is worth nothing if its message does not say what it found,
+which is the same defect this repository has already recorded in the notices gate and in the refusal
+watch.
+
+Verified after the gate fixes rather than around them: `:app:testDebugUnitTest` exits 0, all nine gates
+report CLEAN (the two that read the network were run on their own), and the instrumented suite passes on
+the device under the new id — which is the part that would have caught a manifest entry or a `run-as`
+path that no longer resolves. What a user sees is in the roadmap row: an installed copy is not upgraded
+but joined, the old app and the new one side by side, which is why the change was made while the only
+install anywhere was this machine's emulator.

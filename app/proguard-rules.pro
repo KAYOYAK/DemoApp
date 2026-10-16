@@ -56,7 +56,7 @@
 #
 # This rule is kept because it demonstrably works: with it the class and its method
 # names survive, without it they are renamed. Verified by comparing the dex.
--keep class com.example.demoapp.inference.LocalTools { *; }
+-keep class com.kayoyak.demoapp.inference.LocalTools { *; }
 
 # ---------------------------------------------------------------------------
 # Serialization

@@ -19,9 +19,9 @@
         android:shortcutShortLabel="@string/shortcut_new_chat_short"
         android:shortcutLongLabel="@string/shortcut_new_chat_long">
         <intent
-            android:action="com.example.demoapp.NEW_CHAT"
-            android:targetPackage="com.example.demoapp"
-            android:targetClass="com.example.demoapp.MainActivity" />
+            android:action="com.kayoyak.demoapp.NEW_CHAT"
+            android:targetPackage="com.kayoyak.demoapp"
+            android:targetClass="com.kayoyak.demoapp.MainActivity" />
         <categories android:name="android.shortcut.conversation" />
     </shortcut>
 </shortcuts>

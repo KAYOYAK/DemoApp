@@ -69,7 +69,7 @@ losing the model:
 
 ```powershell
 ./scripts/run-instrumented-test.ps1
-./scripts/run-instrumented-test.ps1 -Class com.example.demoapp.inference.LiteRtLlmEngineTest
+./scripts/run-instrumented-test.ps1 -Class com.kayoyak.demoapp.inference.LiteRtLlmEngineTest
 ./scripts/run-instrumented-test.ps1 -ModelPath D:\path\to\another.litertlm
 ```
 
