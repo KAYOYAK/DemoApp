@@ -1781,11 +1781,16 @@ that survived. The numbers above were recovered by hand from `adb logcat`. The s
 buffer before the run and writes both sources to `build-logs\instrumented-output.txt`, so the evidence
 of a passing run is a file rather than a memory of one.
 
-**What this does not establish.** The machine is `emulator-5554` on a desktop CPU, not a phone; the
-model is a 360M one the catalogue no longer carries; three samples of one prompt is a sign, not a
-default. The row in the roadmap that asks whether the app's own default is right is therefore still
-open, and now says what is missing rather than that nothing had been tried: the same comparison, on a
-phone, on the model the app ships.
+**What this does not establish, and what the value became anyway.** The machine is `emulator-5554` on a
+desktop CPU, not a phone; the model is a 360M one the catalogue no longer carries; three samples of one
+prompt is a sign, not a default. The default therefore stays where the publisher's recommendation already
+put it — `topK = 20` — which is the value no number above argues against: the tighter cut repeated less,
+lost nothing in variety, and was not slower outside the spread. The owner was asked to choose between 20
+and going back to 40 and left the choice to the project, so the project took it on that evidence rather
+than on preference. What the measurement changed is not the value but its standing: 20 had an argument
+from a model card and now also has a reading. The row that asks whether the app's own default is right
+still exists, and now says what is missing rather than that nothing had been tried: the same comparison,
+on a phone, on the model the app ships.
 
 
 

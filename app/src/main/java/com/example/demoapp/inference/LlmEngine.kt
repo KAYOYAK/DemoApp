@@ -233,11 +233,13 @@ sealed interface GenerationEvent {
  * `temperature` is only the default the settings screen opens on; the user's
  * choice replaces it at load.
  *
- * What this is not: a claim to have tuned anything. It is one value brought in
- * line with the publisher's own recommendation for a model this app ships, with
- * the reasoning written down so the next session does not have to guess where 40
- * came from. Nothing here has been measured on a device, because there is no
- * device — see the note in `docs/ROADMAP.md` about real-device verification.
+ * What this is not: a claim to have tuned anything, and not a preference. It was measured once there
+ * was a device to measure on — `SamplerComparisonTest` runs 40 and 20 through this engine at
+ * `temperature = 0.8`, three seeds each — and the tighter cut repeated less (median eight-character
+ * repeat ratio 0.000 against 0.047) with the same variety and no speed difference outside the spread,
+ * on a 360M model rather than a catalogue one: the catalogue's own 4-bit Qwen3 answered with nothing at
+ * all on that machine. A sign, not a proof, so the value is unchanged; the reading and its limits are in
+ * `docs/OPEN-WIRING.md`, and what would settle it is the same comparison on a phone.
  */
 data class GenerationConfig(
     val maxTokens: Int = 512,
