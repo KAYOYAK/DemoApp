@@ -1985,3 +1985,46 @@ the app's own engine, where before it produced samples of zero tokens and a fail
 about the sampler is narrower than the earlier run's: on this model the two settings are indistinguishable on
 repetition, and the tighter cut writes shorter answers, so the value stays where the publisher's own
 recommendation and the 360M reading put it. A phone is still what would settle which of the two reads better.
+
+## The app's own pipeline, on a device, on a model
+
+Every test in `app/src/test/java/com/kayoyak/demoapp/ui/chat` drives a `FakeEngine`, and every
+instrumented test under `inference` builds a `LiteRtLlmEngine` itself. Between them sits the
+composition -- `ChatViewModel.send` -> history -> the runtime's own conversation -> the reply
+reaching the transcript -> the encrypted store -- and that is where this project's defects have
+actually lived: a fake engine whose events ran ahead of the real one (recorded above), and a
+channel the real runtime filled while the engine read the other half of the message. So
+`ChatTurnTest` (`app/src/androidTest/java/com/kayoyak/demoapp/ui/chat/ChatTurnTest.kt`) builds the
+real objects and asks two questions.
+
+It uses the app's own store and model directory: `FileChatStore` over a scratch directory inside
+`filesDir`, so a run never touches the chats the app is holding, and `ModelStore` over
+`filesDir/models`, where the downloader puts the model. On `emulator-5554`, 2026-10-16, through
+`scripts/run-instrumented-test.ps1 -Class com.kayoyak.demoapp.ui.chat.ChatTurnTest`:
+
+| what | value |
+| --- | --- |
+| verdict | `RESULT: PASSED`, 143.8 s |
+| load | `qwen3-0.6b-int4`, `Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm`, 344,671,744 bytes, 126,975 ms |
+| turn one | 光合作用是植物通过叶绿体捕捉阳光和光能，将二氧化碳和水转化为糖类等有机物的过程，以维持生命活动。 |
+| turn two | 呼吸作用是细胞将有机物、无机物及能量从生物体中提取并重新释放的过程。 |
+| context tokens | 346 -> 390, the only mechanical evidence available here that the first turn reached the model |
+| on disk | 4 messages read back through the encrypted store, the first answer's text unchanged |
+
+The assertions are about the mechanism, not the prose: the model loads, both turns produce text,
+the second generation's context is larger than the first's, and what the screen showed is what the
+disk holds. The answers are printed rather than judged -- whether a 0.6B model's explanation of
+photosynthesis is any good is not a thing an assertion can decide.
+
+**The first run found something, and it was the test.** The store held three of four messages.
+Saving is fire-and-forget: `ChatSaving.persist` launches `saveNow`, which ciphers the conversation,
+writes a temporary file beside it and moves it into place, and the read happened inside that
+window. The wait the unit tests already use fixed it (`awaitSaved`), and its failure line reports
+`ChatStore.saveAudit()` beside the view model's `saveNowCalls` and `saveNowThroughLock` -- the
+counters `ChatSaving.saveNow` documents for exactly this, so a *lost* save can be told from a slow
+one. Worth recording because the wrong reading is the cheap one: a test that reads a
+fire-and-forget write immediately reports a product bug in its first afternoon, and this one did.
+
+What it does not establish: one model, one emulator, one pair of prompts, and a load time that is
+the emulator's rather than a phone's. Whether the shipped model's answers are worth their download
+is the comparison the roadmap keeps a row for, and it needs a phone.
