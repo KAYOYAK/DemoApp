@@ -1,5 +1,6 @@
 package com.kayoyak.demoapp.inference
 
+import android.os.Build
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.flow.toList
@@ -23,8 +24,8 @@ import java.io.File
  * everything recorded -- the text, the tokens, the time and a repetition count.
  * What it does not do: decide. Three samples per setting can show that two
  * settings differ observably; it cannot establish which is better, and the
- * timings are an emulator's CPU, which is not a phone. The summary says both of
- * those things rather than leaving them to the reader.
+ * timings belong to whichever machine ran it. The summary says both of those
+ * things, and names the device, rather than leaving them to the reader.
  *
  * The engine takes `topK`, `topP`, `temperature` and the seed together at load
  * time ([LlmEngine.load]'s `sampling`), which is why each sample reloads: a seed
@@ -208,9 +209,10 @@ class SamplerComparisonTest {
             )
         }
         println(
-            "$log: what these numbers are: an emulator's CPU, one prompt, ${seeds.size} samples per setting, " +
-                "temperature fixed at $temperature. They can show that the two settings differ; " +
-                "they cannot say which one writes better, and they are not a phone's timings.",
+            "$log: what these numbers are: ${Build.MODEL} (API ${Build.VERSION.SDK_INT}), one prompt, " +
+                "${seeds.size} samples per setting, temperature fixed at $temperature. " +
+                "They can show that the two settings differ; they cannot say which one writes better, " +
+                "and they are this device's timings rather than any other machine's.",
         )
     }
 
