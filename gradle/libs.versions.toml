@@ -26,7 +26,7 @@ lifecycleViewmodelNav3 = "2.10.0"
 # Licence: Apache-2.0 (verified; see compliance/allowed-licenses.json).
 # Ships arm64-v8a and x86_64 native libraries, so it runs on both a physical
 # device and the x86_64 emulator used during development.
-litertlm = "0.18.0"
+litertlm = "0.18.1"
 
 # HTTP client, used only by the model downloader -- the single place in the
 # application that touches the network. Apache-2.0.
