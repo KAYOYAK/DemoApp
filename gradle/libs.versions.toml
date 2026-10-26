@@ -2,7 +2,7 @@
 # 9.0.1 for the moment. 9.4.1 is available but requires Gradle 9.6.0, and this
 # project is on 9.1.0; taking it means a Gradle upgrade in the same change.
 # Revisit when something actually needs it -- it is not blocking anything.
-androidGradlePlugin = "9.0.1"
+androidGradlePlugin = "9.4.1"
 androidxCore = "1.18.0"
 androidxLifecycle = "2.10.0"
 androidxActivity = "1.13.0"
