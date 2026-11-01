@@ -1,71 +1,69 @@
-# <APP_NAME>
+# <应用名称>
 
 <!--
   ============================================================================
-  BEFORE THE FIRST PUSH -- replace these three placeholders, then delete this
-  comment block. A README that still says "<APP_NAME>" is the fastest way to
-  make a project look abandoned.
+  首次推送之前 —— 把下面这三处占位符换成真实内容，然后删掉这段注释。
+  一份仍然写着「<应用名称>」的 README，是让项目看起来被放弃最快的办法。
   ============================================================================
 -->
 
-> **<one-line description of what this app does and who it is for>**
+> **<一句话说明这个应用做什么、给谁用>**
 
 <!--
-  Add 2-4 real screenshots here once the UI exists. They are the single
-  strongest signal a visitor uses to decide whether to read further.
+  界面做出来之后，在这里放 2–4 张真实截图。这是访客决定要不要继续读下去时
+  最强的单一信号。
   <p align="center">
     <img src="docs/screenshots/home.png" width="30%" />
   </p>
 -->
 
-## Features
+## 功能
 
-- <feature one>
-- <feature two>
-- <feature three>
+- <功能一>
+- <功能二>
+- <功能三>
 
-## Screenshots
+## 截图
 
-_Coming once the first build is usable._
+_等第一个可用版本出来之后补。_
 
-## Requirements
+## 环境要求
 
-| Tool | Version used by this project |
+| 工具 | 本项目使用的版本 |
 | --- | --- |
-| JDK | 17 (Gradle toolchain) |
-| Android SDK Platform | 36 (`compileSdk` / `targetSdk`) |
-| Minimum Android | 24 (`minSdk`) |
+| JDK | 17（Gradle 工具链） |
+| Android SDK Platform | 36（`compileSdk` / `targetSdk`） |
+| 最低 Android 版本 | 24（`minSdk`） |
 | Gradle | 9.1 |
 | Android Gradle Plugin | 9.0.1 |
 | Kotlin | 2.3.20 |
 
-## Building
+## 构建
 
 ```bash
 git clone https://github.com/KAYOYAK/<REPO_NAME>.git
 cd <REPO_NAME>
 
-# Point Gradle at your SDK. This file is machine-specific and gitignored.
+# 告诉 Gradle 你的 SDK 在哪里。这个文件是本机专用的，已加入 gitignore。
 echo "sdk.dir=$ANDROID_HOME" > local.properties
 
-# Debug build
+# 调试构建
 ./gradlew assembleDebug
 
-# Unit tests
+# 单元测试
 ./gradlew testDebugUnitTest
 
 # Lint
 ./gradlew lintDebug
 ```
 
-The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
+调试 APK 会生成在 `app/build/outputs/apk/debug/app-debug.apk`。
 
-On Windows use `gradlew.bat` instead of `./gradlew`.
+Windows 上把 `./gradlew` 换成 `gradlew.bat`。
 
-### Instrumented tests
+### 仪器化测试
 
-They need a device or emulator, and they need a model on it. The script runs them without
-losing the model:
+它们需要一台设备或模拟器，而且设备上要有一个模型。下面这个脚本跑完之后不会把模型弄丢：
 
 ```powershell
 ./scripts/run-instrumented-test.ps1
@@ -73,32 +71,22 @@ losing the model:
 ./scripts/run-instrumented-test.ps1 -ModelPath D:\path\to\another.litertlm
 ```
 
-`gradlew connectedDebugAndroidTest` is the plain Gradle route, and it uninstalls the
-application when it finishes — which takes any model in app-private storage with it, so
-that route cannot be run twice without pushing a model again. The script drives the same
-instrumentation directly: it builds, installs both APKs without uninstalling, launches the
-app once because its `filesDir` is created lazily, copies a model in if one is not already
-there, and runs `am instrument` on the class you asked for.
+`gradlew connectedDebugAndroidTest` 是 Gradle 自带的那条路，它跑完会卸载应用 —— 应用私有目录里的模型也跟着一起没掉，所以那条路没法在不重新推一次模型的情况下跑第二遍。这个脚本直接驱动同一套 instrumentation：构建、安装两个 APK 且不卸载、先启动一次应用（它的 `filesDir` 是懒创建的）、如果模型还不在就复制一个进去，然后对你指定的测试类跑 `am instrument`。
 
-The engine tests look in the app's own `files/models` directory first and fall back to any
-`*.litertlm` file in `/data/local/tmp/models`, so a hand-dropped model is enough:
+引擎测试先看应用自己的 `files/models` 目录，找不到就退回 `/data/local/tmp/models` 里的任意 `*.litertlm` 文件，所以手动放进去一个模型就够了：
 
 ```bash
 adb shell mkdir -p /data/local/tmp/models
 adb push Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm /data/local/tmp/models/
 ```
 
-A test that finds no model says so and returns rather than failing, and the note it prints
-names the file it used.
+找不到模型的测试会说明这一点然后返回，而不是失败；它打印的提示会写清用的是哪个文件。
 
-No pipeline runs this set. An emulator job whose tests skip reports the same green as one
-whose tests pass, and the smallest model in the catalogue is 344 MB — so the choice was
-between a job that cannot fail honestly and no job.
+没有流水线跑这一组测试。一个测试全部被跳过的模拟器任务，和一个测试全部通过的任务，报的都是绿色；而目录里最小的模型是 344 MB —— 所以当初的选择是：一个不可能诚实地失败的任务，或者干脆没有任务。
 
-### Release builds
+### 发布构建
 
-Release signing is intentionally **not** configured in this repository. Supply
-your own keystore locally rather than committing it:
+发布签名是**故意**不配置在这个仓库里的。在本地提供你自己的 keystore，不要把它提交上去：
 
 ```bash
 ./gradlew assembleRelease \
@@ -108,158 +96,99 @@ your own keystore locally rather than committing it:
   -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
 ```
 
-Never commit a `.jks` file or its password. Losing the keystore means you can
-never publish an update to an app that is already on a store — the signing
-identity cannot be replaced.
+绝不要提交 `.jks` 文件或它的密码。丢掉 keystore 意味着你再也无法给已经上架的应用发更新 —— 签名身份是换不掉的。
 
-## Project layout
+## 项目结构
 
 ```
-app/src/main/java/...   Application source (Jetpack Compose)
-app/src/main/res/       Resources: strings, themes, drawables, icons
-app/src/test/           JVM unit tests, run by `testDebugUnitTest`
-app/src/androidTest/    Instrumented tests, need a device or emulator
-gradle/libs.versions.toml   Single source of truth for dependency versions
+app/src/main/java/...   应用源码（Jetpack Compose）
+app/src/main/res/       资源：字符串、主题、drawable、图标
+app/src/test/           JVM 单元测试，由 `testDebugUnitTest` 运行
+app/src/androidTest/    仪器化测试，需要设备或模拟器
+gradle/libs.versions.toml   依赖版本的唯一来源
 ```
 
-## Privacy
+## 隐私
 
 <!--
-  If the app collects or transmits anything at all, say so here and add a
-  privacy policy before publishing to a store. If it truly collects nothing,
-  say that explicitly -- it is a selling point.
+  如果这个应用收集或传输任何东西，在这里说明，并在上架前补一份隐私政策。
+  如果它确实什么都不收集，也要明确写出来 —— 这是一个卖点。
 -->
 
-This app collects nothing. There is no analytics, no crash reporting, no
-telemetry and no account. The network is used to download models and for nothing
-else; after a model is on the device the app works with it switched off.
+这个应用什么都不收集。没有分析、没有崩溃上报、没有遥测，也没有账号。网络只用来下载模型，别的什么都不做；模型到了设备上之后，把网络关掉它照样工作。
 
-Full detail, and the checks that keep these statements true:
-[PRIVACY.md](PRIVACY.md).
+完整细节，以及让这些说法保持为真的那些检查：[PRIVACY.md](PRIVACY.md)。
 
-## Project principles
+## 项目原则
 
-Three constraints are non-negotiable and bind every change — legal, privacy, and
-open-source verifiability. Each one is enforced by a script that fails the build,
-not by a promise in a document.
+三条约束不可谈判，并且约束每一次改动 —— 法律、隐私、开源可验证性。每一条都由一个会让构建失败的脚本强制执行，而不是靠文档里的一句承诺。
 
 **[docs/PRINCIPLES.md](docs/PRINCIPLES.md)**
 
-| Constraint | Enforced by |
+| 约束 | 由谁执行 |
 | --- | --- |
-| Licences | `scripts/check-licenses.ps1` |
-| Privacy contract | `scripts/check-privacy.ps1` |
-| Notices packed inside the shipped AARs | `scripts/check-embedded-notices.ps1` |
-| Legal notice and attribution | `scripts/check-legal-docs.ps1` |
-| Copy in one place, in the app's language | `scripts/check-ui-copy.ps1` |
-| Every screen callback the graph opens is wired | `scripts/check-ui-wiring.ps1` |
-| No copy left over from a reworded feature | `scripts/check-unused-strings.ps1` |
-| Attribution accuracy | `.github/workflows/compliance.yml` |
+| 许可证 | `scripts/check-licenses.ps1` |
+| 隐私契约 | `scripts/check-privacy.ps1` |
+| 打进发布 AAR 里的第三方声明 | `scripts/check-embedded-notices.ps1` |
+| 法律声明与署名 | `scripts/check-legal-docs.ps1` |
+| 文案集中在一处，并使用应用的语言 | `scripts/check-ui-copy.ps1` |
+| 每个屏幕回调都在代码里接上了 | `scripts/check-ui-wiring.ps1` |
+| 改过词的功能没有留下废弃文案 | `scripts/check-unused-strings.ps1` |
+| 署名准确 | `.github/workflows/compliance.yml` |
 
-## Language
+## 语言
 
-**The app is in Chinese, and it is for Chinese speakers.** There is no
-translation layer and no plan for one: the copy lives in
-`app/src/main/res/values/strings.xml`, one file, and every model the catalogue
-offers is one that can hold a Chinese conversation.
+**这个应用是中文的，面向中文使用者。** 没有翻译层，也没有做翻译层的计划：文案就在 `app/src/main/res/values/strings.xml` 这一个文件里，而目录提供的每一个模型都是能进行中文对话的。
 
-That last part is a correctness requirement, not a preference. The first build
-of this app put an English-only 360M model at the top of the list, and a Chinese
-question came back as confident English about something else — which reads as a
-broken app rather than as the wrong model for the job. Every entry now records
-what it can be talked to in, the list shows it, and
-`ModelCatalogue.validate()` refuses a catalogue whose first (default) model
-cannot do Chinese.
+最后这一条是正确性要求，不是偏好。这个应用的第一个版本把一个只会英文的 360M 模型放在列表最上面，一个中文问题回来的是一本正经的英文，说的还是别的事 —— 那读起来像应用坏了，而不是「模型选错了」。现在每个条目都记录它能用什么语言对话，列表会显示出来，而且 `ModelCatalogue.validate()` 会拒绝一个第一个（默认）模型不会中文的目录。
 
-**The catalogue holds Chinese models only.** A model published elsewhere may be
-excellent and still be the wrong choice here: it may not hold a Chinese
-conversation, its host may be unreachable from mainland China, and its publisher
-has no stake in whether it works there. `validate()` also refuses a catalogue
-whose first download source is `huggingface.co`, and the app tries the mirror
-first for the same reason. The list starts at 329 MB so that a device with
-little room to spare can still use the app.
+**目录里只放中文模型。** 别处发布的模型可能很优秀，但在这里仍然是错误的选择：它可能不能进行中文对话，它的主机可能在中国大陆不可达，它的发布者对它在那边能不能用毫无利害关系。`validate()` 同样会拒绝第一个下载源是 `huggingface.co` 的目录，应用也出于同样的原因先试镜像。列表从 329 MB 起步，这样存储吃紧的设备也能用这个应用。
 
-The source comments and this README stay in English, which is the convention the
-codebase has and what an outside contributor reads. That is a decision about
-contributors, not about users.
+源码注释保持英文 —— 这是代码库的约定，也是外部贡献者读的东西；这份 README 用中文，因为它是给使用者看的。这是关于贡献者的决定，不是关于使用者的决定。
 
-## What it does
+## 它能做什么
 
-Text chat with a model that runs entirely on the phone.
+和一个完全跑在手机上的模型进行文字对话。
 
-- **Models.** Download, import from a file, delete. Downloads are resumable and
-  verified against a recorded digest; the mirror is tried first, because the
-  publisher's host is blocked in the country this app is for.
-- **Chat.** Streaming replies, stop mid-reply, regenerate an answer, delete a
-  message or a whole exchange, and edit the last question and ask it again.
-  Code blocks, headings, lists, quotes and inline emphasis are rendered; a reply
-  can be copied whole, or one code block at a time. Every message carries the time
-  it was sent, and replies carry how long they took and how many tokens per second
-  they produced, which is what makes two models comparable.
-- **Search inside a conversation.** A long reply is one where finding a word again
-  matters. The match count is shown, so a shortened transcript never reads as lost
-  messages.
-- **History.** Search across titles and message text, rename, delete, pin to the
-  top, and share a conversation as text. Each row shows how much room it takes.
-- **Backup.** Export every conversation as one file to keep, and import it back.
-  This app keeps everything private and declares no cloud backup, so this is the
-  only way a conversation survives a new phone: "not synced" must not mean "not
-  movable", or privacy becomes a cage.
-- **Text shared in from another app.** Sharing a paragraph here puts it in the
-  composer to be edited and sent. It is not sent automatically — asking is still
-  the user's act.
-- **Settings.** Which processor to use, the system prompt, reply length,
-  temperature, light/dark/system appearance, and text size. Five instructions are
-  built in as a starting point, and your own wording can be saved under a name and
-  reused — reproducing a good instruction from memory is the thing nobody does.
-- **About.** What runs, what does not leave the device, and how to erase
-  everything.
+- **模型。** 下载、从文件导入、删除。下载可续传，并按记录的摘要校验；先试镜像，因为这个应用面向的那个国家里，发布者的主机是被墙的。
+- **对话。** 流式回复、中途停止、重新生成回答、删除一条消息或一整轮对话、编辑最后一个问题再问一遍。代码块、标题、列表、引用和行内强调都会渲染；一条回复可以整条复制，也可以一次只复制一个代码块。每条消息都带发送时间，回复带它花了多久、每秒多少 token —— 这才让两个模型可比。
+- **对话内搜索。** 长回复正是「想再把某个词找出来」变得重要的场合。匹配数量会显示出来，所以一段被截短的记录永远不会读起来像丢了消息。
+- **历史。** 跨标题和消息正文搜索、重命名、删除、置顶，以及把一段对话当作文本分享出去。每一行都显示它占多少空间。
+- **备份。** 把所有对话导出成一个文件保存，也可以再导入回来。这个应用把一切都留在本地，也声明不做云备份，所以这是对话能活过换手机的唯一方式：「不同步」不能等于「搬不走」，否则隐私就变成了笼子。
+- **从别的应用分享进来的文字。** 在这里分享一段文字，它会进到输入框里等你编辑再发。它不会被自动发送 —— 发不发仍然是用户的动作。
+- **设置。** 用哪个处理器、系统提示词、回复长度、temperature、浅色/深色/跟随系统外观，以及文字大小。内置五条指令作为起点，你自己的措辞可以起个名字保存下来复用 —— 凭记忆复现一条好指令，是没人会做的事。
+- **关于。** 什么在跑、什么不会离开设备、以及怎么把一切抹掉。
 
-## Disclaimer and terms
+## 免责声明与条款
 
-This app runs a language model on your device and shows you what it says. Nobody
-reviewed that output, and there is no server in the middle that could have — the
-same property that keeps your conversations private is the one that means nothing
-here can be moderated.
+这个应用在你的设备上跑一个语言模型，把它说的话显示给你。没有人审过那些输出，中间也没有服务器可以审 —— 让你的对话保持私密的那个性质，同时也意味着这里没有任何东西可以被审核。
 
-**It is not professional advice, and it must not be used for medical, legal,
-financial, or safety decisions.** The models it runs are small enough to fit on a
-phone and will state false things confidently.
+**它不是专业建议，绝不能用它做医疗、法律、财务或安全方面的决定。** 它跑的模型小到能装进手机，会很有把握地说错话。
 
-- **[DISCLAIMER.md](DISCLAIMER.md)** — warranty, liability, what the output is,
-  and what you are responsible for.
-- **[docs/legal/TRADEMARKS-AND-CLAIMS.md](docs/legal/TRADEMARKS-AND-CLAIMS.md)** —
-  no affiliation with any model publisher, the trademarks this project refers to
-  by name, what it does not distribute, and how to file an infringement claim.
+- **[DISCLAIMER.md](DISCLAIMER.md)** —— 担保、责任、输出是什么，以及你要为什么负责。
+- **[docs/legal/TRADEMARKS-AND-CLAIMS.md](docs/legal/TRADEMARKS-AND-CLAIMS.md)** —— 与任何模型发布者无关联、本项目指名提到的商标、它不分发什么，以及怎么提出侵权主张。
 
-Both are enforced by `scripts/check-legal-docs.ps1`, which fails the build if
-either is missing, unlinked, or no longer credits a publisher named in the model
-catalogue — and if the app itself has stopped showing a disclaimer. The app shows
-one offline, in **Models → About**, because a document on a website is not
-reachable from the device it is about.
+这两份文件都由 `scripts/check-legal-docs.ps1` 强制：任何一份缺失、没有被链接，或者不再为目录里点名的发布者署名，构建就会失败 —— 如果应用自己不再显示免责声明，也会失败。应用会离线显示一份，在**模型 → 关于**里，因为挂在网站上的文档，从它描述的那台设备上是够不到的。
 
-## Contributing
-Bug reports and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
-Please report security issues privately as described in [SECURITY.md](SECURITY.md).
+## 参与贡献
 
-## License
+欢迎报告问题和提交 PR。见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+安全问题请按 [SECURITY.md](SECURITY.md) 里说的私下报告。
+
+## 许可证
 
 [MIT](LICENSE) © 2026 KAYOYAK
 
 <!--
-  Swapping the licence later is easy while the repository is young and hard once
-  outside contributions exist. If you would rather have:
-    Apache-2.0  -- adds an explicit patent grant; common across the Android
-                   ecosystem (AOSP itself). Recommended if you may ever want
-                   corporate contributors.
-    GPL-3.0     -- copyleft: derivatives must stay open. Use if you want that.
-  Replace LICENSE, then update this section and the badge below.
+  趁仓库还年轻换许可证很容易，一旦有了外部贡献就很难了。如果你更想要：
+    Apache-2.0  —— 增加明确的专利授权；在 Android 生态里很常见（AOSP 本身就是）。
+                   如果你以后可能想要企业贡献者，推荐这个。
+    GPL-3.0     —— copyleft：衍生作品必须保持开源。如果你想要这个就用它。
+  替换 LICENSE，然后更新这一节和下面的徽章。
 -->
 
 [![CI](https://github.com/KAYOYAK/<REPO_NAME>/actions/workflows/ci.yml/badge.svg)](https://github.com/KAYOYAK/<REPO_NAME>/actions/workflows/ci.yml)
 
-## What is built, and what is next
+## 已经做了什么，接下来做什么
 
-[docs/ROADMAP.md](docs/ROADMAP.md) lists every feature this project has decided to
-build, decided against, or has not yet decided about -- one row each, with what it
-is grounded in.
+[docs/ROADMAP.md](docs/ROADMAP.md) 列出了这个项目决定要做的、决定不做的、以及还没决定的每一项 —— 一行一项，并写明它基于什么。
